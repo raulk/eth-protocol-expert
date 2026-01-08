@@ -89,7 +89,7 @@ class PgVectorStore:
         async with self.connection() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
 
-            await conn.execute("""
+            await conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS chunks (
                     id SERIAL PRIMARY KEY,
                     chunk_id VARCHAR(64) UNIQUE NOT NULL,
@@ -98,7 +98,7 @@ class PgVectorStore:
                     token_count INTEGER NOT NULL,
                     chunk_index INTEGER NOT NULL,
                     section_path VARCHAR(256),
-                    embedding vector(1024),
+                    embedding vector({self.embedding_dim}),
                     git_commit VARCHAR(64),
                     created_at TIMESTAMP DEFAULT NOW()
                 )

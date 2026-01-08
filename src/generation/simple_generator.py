@@ -1,5 +1,6 @@
 """Simple Generator - Basic RAG generation for Phase 0."""
 
+import asyncio
 import os
 from dataclasses import dataclass
 
@@ -72,7 +73,8 @@ class SimpleGenerator:
         prompt = self._build_prompt(query, context)
 
         # Generate response
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],

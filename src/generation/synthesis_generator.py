@@ -1,5 +1,6 @@
 """Synthesis Generator - Combine sub-answers into final response (Phase 5)."""
 
+import asyncio
 import os
 import re
 import uuid
@@ -176,7 +177,8 @@ Structure your response to show both individual concepts and their connections."
         )
 
         # Generate response
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],

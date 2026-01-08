@@ -1,5 +1,6 @@
 """Simple Retriever - Basic vector search retrieval."""
 
+import asyncio
 from dataclasses import dataclass
 
 import structlog
@@ -53,7 +54,7 @@ class SimpleRetriever:
         k = top_k or self.default_top_k
 
         # Embed the query
-        query_embedding = self.embedder.embed_query(query)
+        query_embedding = await asyncio.to_thread(self.embedder.embed_query, query)
 
         # Search for similar chunks
         results = await self.store.search(

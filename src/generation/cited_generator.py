@@ -1,5 +1,6 @@
 """Cited Generator - RAG generation with citations for Phase 1."""
 
+import asyncio
 import os
 import re
 import uuid
@@ -74,7 +75,8 @@ class CitedGenerator:
         prompt = self._build_prompt(query, context)
 
         # Generate response
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],

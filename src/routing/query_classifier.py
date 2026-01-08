@@ -1,5 +1,6 @@
 """Query Classifier - Determine query complexity for routing (Phase 5)."""
 
+import asyncio
 import json
 import os
 import re
@@ -209,7 +210,8 @@ class QueryClassifier:
         """LLM-based query classification for ambiguous cases."""
         prompt = self._build_classification_prompt(query)
 
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=512,
             messages=[{"role": "user", "content": prompt}],

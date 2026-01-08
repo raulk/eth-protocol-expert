@@ -1,5 +1,6 @@
 """Hybrid Retriever - Combine BM25 and vector search using Reciprocal Rank Fusion."""
 
+import asyncio
 from dataclasses import dataclass
 
 import structlog
@@ -103,7 +104,7 @@ class HybridRetriever:
         b_limit = bm25_limit or (k * 2)
 
         # Run both searches in parallel
-        query_embedding = self.embedder.embed_query(query)
+        query_embedding = await asyncio.to_thread(self.embedder.embed_query, query)
 
         # Vector search with optional metadata filter
         vector_results = await self._vector_search_with_filter(

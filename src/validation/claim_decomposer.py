@@ -1,5 +1,6 @@
 """Claim Decomposer - Break complex claims into atomic facts (Phase 2)."""
 
+import asyncio
 import json
 import os
 import re
@@ -49,7 +50,8 @@ class ClaimDecomposer:
         """
         prompt = self._build_prompt(claim_text)
 
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],

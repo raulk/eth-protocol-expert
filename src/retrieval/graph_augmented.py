@@ -1,5 +1,6 @@
 """Graph-Augmented Retrieval - Enhance retrieval with EIP relationships."""
 
+import asyncio
 import re
 from dataclasses import dataclass, field
 
@@ -98,7 +99,7 @@ class GraphAugmentedRetriever:
         depth = related_depth or self.max_graph_depth
 
         # Step 1: Standard vector search
-        query_embedding = self.embedder.embed_query(query)
+        query_embedding = await asyncio.to_thread(self.embedder.embed_query, query)
         primary_results = await self.vector_store.search(
             query_embedding=query_embedding,
             limit=k,

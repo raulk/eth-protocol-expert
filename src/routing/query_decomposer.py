@@ -1,5 +1,6 @@
 """Query Decomposer - Break complex queries into sub-questions (Phase 5)."""
 
+import asyncio
 import json
 import os
 import re
@@ -185,7 +186,8 @@ class QueryDecomposer:
         """LLM-based query decomposition for complex cases."""
         prompt = self._build_decomposition_prompt(query)
 
-        response = self.client.messages.create(
+        response = await asyncio.to_thread(
+            self.client.messages.create,
             model=self.model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],

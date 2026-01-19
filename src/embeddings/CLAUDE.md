@@ -9,4 +9,10 @@
 |----|------|---|-------|------|
 | #1045 | 6:24 PM | 🟣 | Voyage AI Embedding Service with Batch Processing | ~535 |
 | #1032 | 6:22 PM | ✅ | Created Embeddings Package with Voyage Embedder Export | ~167 |
+
+### Jan 8, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #1492 | 2:55 PM | ✅ | Added CodeEmbedder to Embeddings Module Exports | ~314 |
 </claude-mem-context>

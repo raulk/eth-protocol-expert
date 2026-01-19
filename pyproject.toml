@@ -36,6 +36,13 @@ dependencies = [
     "tiktoken>=0.5.0",
     "structlog>=24.1.0",
     "python-dotenv>=1.0.0",
+
+    # PDF extraction (Phase 10)
+    "PyMuPDF>=1.24.0",
+
+    # Code parsing (Phase 13)
+    "tree-sitter>=0.21.0,<0.22.0",
+    "tree-sitter-languages>=1.10.0",
 ]
 
 [project.optional-dependencies]
@@ -84,3 +91,8 @@ combine-as-imports = true
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = true
+
+[dependency-groups]
+dev = [
+    "ruff>=0.14.10",
+]

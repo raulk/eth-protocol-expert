@@ -11,4 +11,12 @@
 | #1044 | 6:23 PM | 🟣 | SectionChunker Implementation with Structure-Aware Splitting | ~538 |
 | #1042 | " | 🟣 | Implemented Fixed-Size Chunker with Token-Based Splitting | ~525 |
 | #1031 | 6:22 PM | 🟣 | Chunking Module Package Initialization | ~238 |
+
+### Jan 8, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #1498 | 2:56 PM | 🔴 | Removed Unused Loop Variable in Code Chunker | ~264 |
+| #1469 | 2:48 PM | ✅ | Added ClassVar Annotations to Paper Chunker Patterns | ~371 |
+| #1455 | 2:44 PM | 🟣 | Phase 11: AllCoreDevs Transcript Chunking | ~613 |
 </claude-mem-context>

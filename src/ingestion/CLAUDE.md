@@ -13,4 +13,12 @@
 | #1041 | 6:23 PM | 🟣 | EIP Parser with YAML Frontmatter and Section Extraction | ~583 |
 | #1040 | " | 🟣 | EIPLoader Implementation for Repository Management and Document Loading | ~445 |
 | #1030 | 6:22 PM | 🟣 | Ingestion Module Initialization | ~248 |
+
+### Jan 8, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #1467 | 2:47 PM | 🔴 | Fixed String Escaping in Mojibake Pattern | ~341 |
+| #1447 | 2:42 PM | 🟣 | Phase 8: PDF Content Extraction with PyMuPDF | ~634 |
+| #1443 | 2:41 PM | 🟣 | Phase 8: ArXiv Academic Paper Ingestion | ~615 |
 </claude-mem-context>

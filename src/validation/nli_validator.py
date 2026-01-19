@@ -57,17 +57,20 @@ class CitationValidation:
 
 
 class NLIValidator:
-    """Validate citations using DeBERTa NLI model.
+    """Validate citations using NLI model.
 
     Uses multi-layer validation:
     1. Decompose claims into atomic facts (optional, via ClaimDecomposer)
     2. Check each fact against evidence via NLI
     3. Aggregate results to determine support level
+
+    Default model is facebook/bart-large-mnli (public, no auth required).
+    For higher accuracy, use microsoft/deberta-v3-large-mnli (requires HF login).
     """
 
     def __init__(
         self,
-        model_name: str = "microsoft/deberta-v3-large-mnli",
+        model_name: str = "facebook/bart-large-mnli",
         device: str | None = None,
         entailment_threshold: float = 0.7,
         contradiction_threshold: float = 0.7,
@@ -130,11 +133,14 @@ class NLIValidator:
             outputs = self._model(**inputs)
             probs = torch.softmax(outputs.logits, dim=-1)[0].cpu().numpy()
 
-        # DeBERTa MNLI label order: contradiction, neutral, entailment
+        # Get label mapping from model config
+        id2label = self._model.config.id2label
+        label_to_idx = {v.lower(): k for k, v in id2label.items()}
+
         return NLIResult(
-            contradiction=float(probs[0]),
-            neutral=float(probs[1]),
-            entailment=float(probs[2]),
+            contradiction=float(probs[label_to_idx.get("contradiction", 0)]),
+            neutral=float(probs[label_to_idx.get("neutral", 1)]),
+            entailment=float(probs[label_to_idx.get("entailment", 2)]),
         )
 
     def validate_claim(

@@ -1,3 +1,4 @@
+from .chunk_converter import convert_chunks, to_standard_chunk
 from .code_chunker import CodeChunk, CodeChunker
 from .fixed_chunker import Chunk, FixedChunker
 from .forum_chunker import ForumChunker
@@ -16,4 +17,6 @@ __all__ = [
     "SectionChunker",
     "TranscriptChunk",
     "TranscriptChunker",
+    "convert_chunks",
+    "to_standard_chunk",
 ]

@@ -77,25 +77,35 @@ class ACDTranscriptLoader:
         """List all available ACD transcripts."""
         transcripts = []
 
-        # ACD transcripts are in AllCoreDevs-Meetings/ directory
-        acd_path = self.repo_path / "AllCoreDevs-Meetings"
-        if not acd_path.exists():
-            logger.warning("acd_directory_not_found", path=str(acd_path))
-            return transcripts
+        # ACD transcripts are in AllCoreDevs-EL-Meetings/ and AllCoreDevs-CL-Meetings/ directories
+        acd_paths = [
+            self.repo_path / "AllCoreDevs-EL-Meetings",
+            self.repo_path / "AllCoreDevs-CL-Meetings",
+            self.repo_path / "AllCoreDevs-Meetings",  # Legacy path
+        ]
 
-        # Find all markdown files
-        for md_file in sorted(acd_path.glob("*.md")):
-            transcript = self._parse_transcript_file(md_file)
-            if transcript:
-                transcripts.append(transcript)
+        found_any = False
+        for acd_path in acd_paths:
+            if not acd_path.exists():
+                continue
+            found_any = True
 
-        # Also check subdirectories (some calls may be organized by year)
-        for subdir in acd_path.iterdir():
-            if subdir.is_dir():
-                for md_file in sorted(subdir.glob("*.md")):
-                    transcript = self._parse_transcript_file(md_file)
-                    if transcript:
-                        transcripts.append(transcript)
+            # Find all markdown files
+            for md_file in sorted(acd_path.glob("*.md")):
+                transcript = self._parse_transcript_file(md_file)
+                if transcript:
+                    transcripts.append(transcript)
+
+            # Also check subdirectories (some calls may be organized by year)
+            for subdir in acd_path.iterdir():
+                if subdir.is_dir():
+                    for md_file in sorted(subdir.glob("*.md")):
+                        transcript = self._parse_transcript_file(md_file)
+                        if transcript:
+                            transcripts.append(transcript)
+
+        if not found_any:
+            logger.warning("acd_directory_not_found", paths=[str(p) for p in acd_paths])
 
         logger.info("found_acd_transcripts", count=len(transcripts))
         return transcripts

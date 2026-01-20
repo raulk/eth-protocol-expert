@@ -1,9 +1,11 @@
 """PostgreSQL Vector Store - Store and retrieve chunks using pgvector."""
 
+import json
 import os
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 
 import asyncpg
 import structlog
@@ -119,8 +121,18 @@ class PgVectorStore:
                     git_commit VARCHAR(64),
                     raw_content TEXT,
                     created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
+                    updated_at TIMESTAMP DEFAULT NOW(),
+                    document_type VARCHAR(64) DEFAULT 'eip',
+                    source VARCHAR(128),
+                    metadata JSONB DEFAULT '{}'
                 )
+            """)
+
+            # Migration for existing databases - add new columns if missing
+            await conn.execute("""
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS document_type VARCHAR(64) DEFAULT 'eip';
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS source VARCHAR(128);
+                ALTER TABLE documents ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
             """)
 
             await conn.execute("""
@@ -154,6 +166,8 @@ class PgVectorStore:
             # Use a transaction for batch insert
             async with conn.transaction():
                 for ec in embedded_chunks:
+                    # Remove null bytes that can occur in PDF extraction
+                    clean_content = ec.chunk.content.replace("\x00", "") if ec.chunk.content else ""
                     await conn.execute(
                         """
                         INSERT INTO chunks (
@@ -168,7 +182,7 @@ class PgVectorStore:
                         """,
                         ec.chunk.chunk_id,
                         ec.chunk.document_id,
-                        ec.chunk.content,
+                        clean_content,
                         ec.chunk.token_count,
                         ec.chunk.chunk_index,
                         ec.chunk.section_path,
@@ -223,6 +237,62 @@ class PgVectorStore:
                 requires,
                 raw_content,
                 git_commit,
+            )
+
+    async def store_generic_document(
+        self,
+        document_id: str,
+        document_type: str,
+        title: str,
+        source: str,
+        raw_content: str,
+        metadata: dict[str, Any] | None = None,
+        author: str | None = None,
+        git_commit: str | None = None,
+    ) -> None:
+        """Store a generic document (forum post, transcript, paper, spec).
+
+        Args:
+            document_id: Unique identifier (e.g., "ethresearch-topic-1234")
+            document_type: One of: forum_topic, acd_transcript, arxiv_paper, consensus_spec, execution_spec
+            title: Document title
+            source: Source identifier (e.g., "ethresearch", "ethereum/pm")
+            raw_content: Full text content
+            metadata: Additional JSON metadata
+            author: Author name(s)
+            git_commit: Git commit hash if from a repo
+        """
+        # Remove null bytes that can occur in PDF extraction
+        clean_content = raw_content.replace("\x00", "") if raw_content else ""
+        clean_title = title.replace("\x00", "") if title else ""
+        clean_author = author.replace("\x00", "") if author else None
+
+        async with self.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO documents (
+                    document_id, title, author, raw_content, git_commit,
+                    document_type, source, metadata
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                ON CONFLICT (document_id) DO UPDATE SET
+                    title = EXCLUDED.title,
+                    author = EXCLUDED.author,
+                    raw_content = EXCLUDED.raw_content,
+                    git_commit = EXCLUDED.git_commit,
+                    document_type = EXCLUDED.document_type,
+                    source = EXCLUDED.source,
+                    metadata = EXCLUDED.metadata,
+                    updated_at = NOW()
+                """,
+                document_id,
+                clean_title,
+                clean_author,
+                clean_content,
+                git_commit,
+                document_type,
+                source,
+                json.dumps(metadata or {}),
             )
 
     async def search(

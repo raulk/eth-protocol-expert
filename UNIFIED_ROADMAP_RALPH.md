@@ -11,8 +11,8 @@ This version of the roadmap is structured for autonomous execution via ralph loo
 - [x] Phase 2a — Extended Corpus: ERCs + RIPs
 - [x] Phase 2b — Extended Corpus: Protocol Specs
 - [x] Phase 2c — Extended Corpus: APIs
-- [→] Phase 3a — Forum Corpus
-- [ ] Phase 3b — Research Corpus
+- [x] Phase 3a — Forum Corpus
+- [→] Phase 3b — Research Corpus
 - [ ] Phase 4 — Continuous Ingestion
 - [ ] Phase 5 — Graph Integration (FalkorDB)
 - [ ] Phase 6 — Retrieval Upgrades
@@ -218,13 +218,13 @@ uv run python scripts/query_cli.py "What is the eth_getBlockByNumber endpoint?" 
 **Dependencies**: Phase 1 complete (cache layer).
 
 **Checklist**
-- [ ] Verify `src/ingestion/ethresearch_loader.py` exists
-- [ ] Verify `src/ingestion/magicians_loader.py` exists
-- [ ] Run ethresearch sync (`uv run python scripts/sync_ethresearch.py --max-topics 500`)
-- [ ] Run ethresearch ingestion (`uv run python scripts/ingest_ethresearch.py`)
-- [ ] Run magicians ingestion (`uv run python scripts/ingest_magicians.py --max-topics 500`)
-- [ ] Verify forum chunks in database with raw markdown content
-- [ ] Test query returns forum discussion results
+- [x] Verify `src/ingestion/ethresearch_loader.py` exists
+- [x] Verify `src/ingestion/magicians_loader.py` exists
+- [x] Run ethresearch sync (`uv run python scripts/sync_ethresearch.py --max-topics 500`) - 2,847 topics cached
+- [x] Run ethresearch ingestion (`uv run python scripts/ingest_ethresearch.py`) - 2,858 forum topics in DB
+- [x] Run magicians ingestion (`uv run python scripts/ingest_magicians.py --max-topics 500`) - 158 new chunks
+- [x] Verify forum chunks in database with raw markdown content
+- [x] Test query returns forum discussion results
 
 **Files to create/modify**
 - `src/ingestion/ethresearch_loader.py` (verify/enhance)

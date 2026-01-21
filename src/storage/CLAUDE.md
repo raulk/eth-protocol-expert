@@ -10,4 +10,16 @@
 | #1319 | 9:15 PM | 🔵 | PostgreSQL Vector Store Schema and Operations | ~495 |
 | #1051 | 6:25 PM | 🟣 | Implemented PostgreSQL Vector Store with pgvector Integration | ~702 |
 | #1033 | 6:22 PM | 🟣 | Storage Module Initialization with PostgreSQL Vector Store | ~289 |
+
+### Jan 21, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #3245 | 8:35 PM | 🔴 | Fixed F-string Brace Escaping for JSONB Default Value | ~287 |
+| #3242 | " | 🔴 | F-string Syntax Error in Chunks Table Schema | ~309 |
+| #3233 | 8:34 PM | ✅ | Enhanced store_embedded_chunks to Populate Metadata Field | ~396 |
+| #3231 | " | 🟣 | Added Metadata JSONB Column to Chunks Table | ~317 |
+| #3229 | 8:33 PM | ✅ | Added Metadata JSONB Column to Chunks Table Schema | ~342 |
+| #3224 | " | 🔵 | PostgreSQL Vector Store Schema with Metadata Support | ~361 |
+| #2930 | 1:49 PM | 🔵 | PostgreSQL vector store implements comprehensive document and chunk storage | ~440 |
 </claude-mem-context>

@@ -199,3 +199,73 @@ class RawContentCache:
 
         self._indexes.pop(source, None)
         return count
+
+    def detect_drift(self, source: str, item_id: str, new_content: bytes) -> bool:
+        """Check if content has changed since last cache.
+
+        Args:
+            source: Source identifier
+            item_id: Unique item ID
+            new_content: New content to compare against cached content
+
+        Returns:
+            True if content differs from cache (drift detected), False otherwise.
+            Also returns True if item is not in cache.
+        """
+        entry = self.get(source, item_id)
+        if not entry:
+            return True
+
+        new_hash = f"sha256:{hashlib.sha256(new_content).hexdigest()}"
+        drifted = entry.content_hash != new_hash
+
+        if drifted:
+            logger.info(
+                "drift_detected",
+                source=source,
+                item_id=item_id,
+                old_hash=entry.content_hash[:20],
+                new_hash=new_hash[:20],
+            )
+
+        return drifted
+
+    def get_drift_report(self, source: str, new_items: dict[str, bytes]) -> dict:
+        """Generate a drift report comparing new content against cache.
+
+        Args:
+            source: Source identifier
+            new_items: Dict mapping item_id to new content bytes
+
+        Returns:
+            Dict with keys: added, modified, unchanged, removed
+        """
+        index = self._load_index(source)
+        cached_ids = set(index["entries"].keys())
+        new_ids = set(new_items.keys())
+
+        added = new_ids - cached_ids
+        removed = cached_ids - new_ids
+        common = new_ids & cached_ids
+
+        modified = set()
+        unchanged = set()
+
+        for item_id in common:
+            if self.detect_drift(source, item_id, new_items[item_id]):
+                modified.add(item_id)
+            else:
+                unchanged.add(item_id)
+
+        return {
+            "added": list(added),
+            "modified": list(modified),
+            "unchanged": list(unchanged),
+            "removed": list(removed),
+            "summary": {
+                "added_count": len(added),
+                "modified_count": len(modified),
+                "unchanged_count": len(unchanged),
+                "removed_count": len(removed),
+            },
+        }

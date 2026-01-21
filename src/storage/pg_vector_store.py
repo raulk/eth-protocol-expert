@@ -102,7 +102,8 @@ class PgVectorStore:
                     section_path VARCHAR(256),
                     embedding vector({self.embedding_dim}),
                     git_commit VARCHAR(64),
-                    created_at TIMESTAMP DEFAULT NOW()
+                    created_at TIMESTAMP DEFAULT NOW(),
+                    metadata JSONB DEFAULT '{{}}'
                 )
             """)
 
@@ -133,6 +134,7 @@ class PgVectorStore:
                 ALTER TABLE documents ADD COLUMN IF NOT EXISTS document_type VARCHAR(64) DEFAULT 'eip';
                 ALTER TABLE documents ADD COLUMN IF NOT EXISTS source VARCHAR(128);
                 ALTER TABLE documents ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
+                ALTER TABLE chunks ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT '{}';
             """)
 
             await conn.execute("""
@@ -157,10 +159,19 @@ class PgVectorStore:
         self,
         embedded_chunks: list[EmbeddedChunk],
         git_commit: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ):
-        """Store embedded chunks in the database."""
+        """Store embedded chunks in the database.
+
+        Args:
+            embedded_chunks: List of chunks with embeddings to store
+            git_commit: Optional git commit hash for versioning
+            metadata: Optional metadata dict to store with each chunk
+        """
         if not embedded_chunks:
             return
+
+        metadata_json = json.dumps(metadata or {})
 
         async with self.connection() as conn:
             # Use a transaction for batch insert
@@ -168,17 +179,21 @@ class PgVectorStore:
                 for ec in embedded_chunks:
                     # Remove null bytes that can occur in PDF extraction
                     clean_content = ec.chunk.content.replace("\x00", "") if ec.chunk.content else ""
+                    # Merge chunk-specific metadata with provided metadata
+                    chunk_meta = getattr(ec.chunk, "metadata", {}) or {}
+                    merged_meta = {**(metadata or {}), **chunk_meta}
                     await conn.execute(
                         """
                         INSERT INTO chunks (
                             chunk_id, document_id, content, token_count,
-                            chunk_index, section_path, embedding, git_commit
+                            chunk_index, section_path, embedding, git_commit, metadata
                         )
-                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                         ON CONFLICT (chunk_id) DO UPDATE SET
                             content = EXCLUDED.content,
                             embedding = EXCLUDED.embedding,
-                            git_commit = EXCLUDED.git_commit
+                            git_commit = EXCLUDED.git_commit,
+                            metadata = EXCLUDED.metadata
                         """,
                         ec.chunk.chunk_id,
                         ec.chunk.document_id,
@@ -188,6 +203,7 @@ class PgVectorStore:
                         ec.chunk.section_path,
                         ec.embedding,
                         git_commit,
+                        json.dumps(merged_meta),
                     )
 
         logger.info("stored_chunks", count=len(embedded_chunks))

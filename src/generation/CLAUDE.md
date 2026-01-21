@@ -12,4 +12,10 @@
 | #1063 | 6:29 PM | 🟣 | Citation-Tracking Generator with Evidence Ledger for Phase 1 | ~664 |
 | #1055 | 6:28 PM | 🟣 | Basic RAG Generator with Claude Integration for Phase 0 | ~598 |
 | #1035 | 6:22 PM | ✅ | Created Generation Package with Simple and Cited Generator Exports | ~232 |
+
+### Jan 21, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2929 | 1:49 PM | 🔵 | Simple generator implements basic RAG pipeline with Claude | ~394 |
 </claude-mem-context>

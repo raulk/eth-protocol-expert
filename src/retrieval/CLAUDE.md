@@ -17,4 +17,11 @@
 | ID | Time | T | Title | Read |
 |----|------|---|-------|------|
 | #1433 | 2:40 PM | 🔵 | Graph-Augmented Retrieval Implementation | ~487 |
+
+### Jan 21, 2026
+
+| ID | Time | T | Title | Read |
+|----|------|---|-------|------|
+| #2928 | 1:48 PM | 🔵 | Simple retriever implements basic vector search with citation support | ~355 |
+| #2924 | " | 🔵 | Retrieval module architecture discovered | ~353 |
 </claude-mem-context>

@@ -14,8 +14,8 @@ This version of the roadmap is structured for autonomous execution via ralph loo
 - [x] Phase 3a — Forum Corpus
 - [x] Phase 3b — Research Corpus
 - [x] Phase 4 — Continuous Ingestion
-- [→] Phase 5 — Graph Integration (FalkorDB)
-- [ ] Phase 6 — Retrieval Upgrades
+- [x] Phase 5 — Graph Integration (FalkorDB)
+- [→] Phase 6 — Retrieval Upgrades
 - [ ] Phase 7 — Evidence & Validation Upgrades
 - [ ] Phase 8 — Reasoning & Agentic Retrieval
 - [ ] Phase 9 — Ensemble & Routing
@@ -332,14 +332,19 @@ uv run python scripts/continuous_ingestion.py --once 2>&1 | grep -q "already up 
 **Dependencies**: Phase 1 complete, EIP corpus ingested.
 
 **Checklist**
-- [ ] Verify FalkorDB in `docker-compose.yml`
-- [ ] Create/verify `src/graph/falkordb_store.py`
-- [ ] Fix ingestion pipeline to populate graph edges on EIP ingest
-- [ ] Add graph initialization to API lifespan in `src/api/main.py`
-- [ ] Add `/graph/dependencies/{eip}` endpoint
-- [ ] Add `/graph/dependents/{eip}` endpoint
-- [ ] Add graph-augmented query mode to retrieval
-- [ ] Test dependency traversal returns expected EIPs
+- [x] Verify FalkorDB in `docker-compose.yml` - added port binding 127.0.0.1:6379
+- [x] Create/verify `src/graph/falkordb_store.py` - complete with node/edge methods
+- [x] Fix ingestion pipeline to populate graph edges on EIP ingest - already integrated
+- [x] Add graph initialization to API lifespan in `src/api/main.py` - complete
+- [x] Add `/graph/dependencies/{eip}` endpoint - `/eip/{n}/dependencies`
+- [x] Add `/graph/dependents/{eip}` endpoint - `/eip/{n}/dependents`
+- [x] Add graph-augmented query mode to retrieval - `mode=graph` in API
+- [x] Test dependency traversal returns expected EIPs - 884 nodes, 537 REQUIRES edges
+
+**Graph Statistics**:
+- Nodes: 884 EIPs
+- Relationships: 537 REQUIRES edges
+- Example: EIP-1559 depends on [2718, 2930], dependents include [1418, 2780, 3041, ...]
 
 **Files to create/modify**
 - `src/graph/falkordb_store.py` (new or verify)

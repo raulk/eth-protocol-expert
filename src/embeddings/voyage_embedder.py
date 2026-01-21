@@ -20,12 +20,12 @@ class EmbeddedChunk:
 
 
 class VoyageEmbedder:
-    """Generate embeddings using Voyage AI's voyage-3 model."""
+    """Generate embeddings using Voyage AI's voyage-4-large model."""
 
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "voyage-3",
+        model: str = "voyage-4-large",
         batch_size: int = 128,
     ):
         self.api_key = api_key or os.environ.get("VOYAGE_API_KEY")
@@ -35,7 +35,7 @@ class VoyageEmbedder:
         self.model = model
         self.batch_size = batch_size
         self.client = voyageai.Client(api_key=self.api_key)
-        self.embedding_dim = 1024  # voyage-3 dimension
+        self.embedding_dim = 1024  # voyage-4-large default dimension
 
     def embed_chunks(self, chunks: list[Chunk]) -> list[EmbeddedChunk]:
         """Embed a list of chunks."""

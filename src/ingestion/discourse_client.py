@@ -14,6 +14,7 @@ logger = structlog.get_logger()
 @dataclass
 class DiscoursePost:
     """A single post from a Discourse forum."""
+
     post_id: int
     topic_id: int
     post_number: int
@@ -27,6 +28,7 @@ class DiscoursePost:
 @dataclass
 class DiscourseTopic:
     """A topic (thread) from a Discourse forum."""
+
     topic_id: int
     title: str
     category_id: int | None
@@ -35,12 +37,25 @@ class DiscourseTopic:
     posts_count: int
     created_at: datetime
     last_posted_at: datetime | None
+    bumped_at: datetime | None  # Updated on any activity (new post, edit, etc.)
     tags: list[str]
+
+
+@dataclass
+class ForumStatistics:
+    """Forum-wide statistics from Discourse."""
+
+    topics_count: int
+    posts_count: int
+    users_count: int
+    topics_7_days: int
+    topics_30_days: int
 
 
 @dataclass
 class DiscourseTopicWithPosts:
     """A topic with all its posts loaded."""
+
     topic: DiscourseTopic
     posts: list[DiscoursePost]
 
@@ -104,7 +119,7 @@ class DiscourseClient:
             except httpx.HTTPStatusError as e:
                 if e.response.status_code == 429:
                     # Rate limited - back off exponentially
-                    wait_time = (2 ** attempt) * self.rate_limit_delay
+                    wait_time = (2**attempt) * self.rate_limit_delay
                     logger.warning(
                         "rate_limited",
                         endpoint=endpoint,
@@ -143,20 +158,34 @@ class DiscourseClient:
         categories = {c["id"]: c["name"] for c in data.get("categories", [])}
 
         for t in topic_list.get("topics", []):
-            topics.append(DiscourseTopic(
-                topic_id=t["id"],
-                title=t["title"],
-                category_id=t.get("category_id"),
-                category_name=categories.get(t.get("category_id")),
-                slug=t["slug"],
-                posts_count=t["posts_count"],
-                created_at=_parse_datetime(t["created_at"]),
-                last_posted_at=_parse_datetime(t.get("last_posted_at")),
-                tags=t.get("tags", []),
-            ))
+            topics.append(
+                DiscourseTopic(
+                    topic_id=t["id"],
+                    title=t["title"],
+                    category_id=t.get("category_id"),
+                    category_name=categories.get(t.get("category_id")),
+                    slug=t["slug"],
+                    posts_count=t["posts_count"],
+                    created_at=_parse_datetime(t["created_at"]),
+                    last_posted_at=_parse_datetime(t.get("last_posted_at")),
+                    bumped_at=_parse_datetime(t.get("bumped_at")),
+                    tags=t.get("tags", []),
+                )
+            )
 
         logger.debug("fetched_latest_topics", page=page, count=len(topics))
         return topics
+
+    async def get_statistics(self) -> ForumStatistics:
+        """Fetch forum-wide statistics."""
+        data = await self._get("/site/statistics.json")
+        return ForumStatistics(
+            topics_count=data.get("topics_count", 0),
+            posts_count=data.get("posts_count", 0),
+            users_count=data.get("users_count", 0),
+            topics_7_days=data.get("topics_7_days", 0),
+            topics_30_days=data.get("topics_30_days", 0),
+        )
 
     async def iter_all_topics(self, max_pages: int = 100) -> AsyncIterator[DiscourseTopic]:
         """Iterate through all topics across pages."""
@@ -167,23 +196,55 @@ class DiscourseClient:
             for topic in topics:
                 yield topic
 
+    async def iter_topics_since(
+        self,
+        since: datetime,
+        max_pages: int = 100,
+    ) -> AsyncIterator[DiscourseTopic]:
+        """Iterate topics with activity since a given datetime.
+
+        Topics are returned in reverse chronological order by bumped_at.
+        Stops pagination early when we hit topics older than 'since'.
+        """
+        for page in range(max_pages):
+            topics = await self.get_latest_topics(page=page)
+            if not topics:
+                break
+
+            for topic in topics:
+                # Stop when we hit topics older than our cutoff
+                if topic.bumped_at and topic.bumped_at < since:
+                    logger.debug(
+                        "reached_cutoff",
+                        page=page,
+                        topic_id=topic.topic_id,
+                        bumped_at=topic.bumped_at.isoformat(),
+                        since=since.isoformat(),
+                    )
+                    return  # Stop iteration entirely
+
+                yield topic
+
     async def search_topics(self, query: str) -> list[DiscourseTopic]:
         """Search for topics matching a query (e.g., 'EIP-4844')."""
         data = await self._get("/search.json", params={"q": query})
         topics = []
 
         for t in data.get("topics", []):
-            topics.append(DiscourseTopic(
-                topic_id=t["id"],
-                title=t["title"],
-                category_id=t.get("category_id"),
-                category_name=None,  # Not included in search results
-                slug=t["slug"],
-                posts_count=t.get("posts_count", 1),
-                created_at=_parse_datetime(t["created_at"]),
-                last_posted_at=_parse_datetime(t.get("last_posted_at")),
-                tags=t.get("tags", []),
-            ))
+            topics.append(
+                DiscourseTopic(
+                    topic_id=t["id"],
+                    title=t["title"],
+                    category_id=t.get("category_id"),
+                    category_name=None,  # Not included in search results
+                    slug=t["slug"],
+                    posts_count=t.get("posts_count", 1),
+                    created_at=_parse_datetime(t["created_at"]),
+                    last_posted_at=_parse_datetime(t.get("last_posted_at")),
+                    bumped_at=_parse_datetime(t.get("bumped_at")),
+                    tags=t.get("tags", []),
+                )
+            )
 
         logger.debug("searched_topics", query=query, count=len(topics))
         return topics
@@ -206,6 +267,7 @@ class DiscourseClient:
             posts_count=data["posts_count"],
             created_at=_parse_datetime(data["created_at"]),
             last_posted_at=_parse_datetime(data.get("last_posted_at")),
+            bumped_at=_parse_datetime(data.get("bumped_at")),
             tags=data.get("tags", []),
         )
 
@@ -253,6 +315,7 @@ class DiscourseClient:
             posts_count=data["posts_count"],
             created_at=_parse_datetime(data["created_at"]),
             last_posted_at=_parse_datetime(data.get("last_posted_at")),
+            bumped_at=_parse_datetime(data.get("bumped_at")),
             tags=data.get("tags", []),
         )
 

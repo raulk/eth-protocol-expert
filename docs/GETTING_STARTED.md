@@ -149,6 +149,38 @@ curl -X POST http://localhost:8000/query \
   -d '{"query": "What is EIP-4844?", "mode": "cited"}'
 ```
 
+## Step 8: Ingest forum discussions (optional)
+
+The system can also ingest discussions from ethresear.ch (Ethereum Research forum).
+
+### Sync forum topics to local cache
+
+```bash
+# Show statistics (forum total vs cached)
+uv run python scripts/sync_ethresearch.py --stats-only
+
+# Sync latest 1000 topics
+uv run python scripts/sync_ethresearch.py --max-topics 1000
+
+# Incremental sync (only topics modified since last sync)
+uv run python scripts/sync_ethresearch.py --incremental
+```
+
+### Ingest cached topics into database
+
+```bash
+# Ingest from cache (skip already ingested)
+uv run python scripts/ingest_ethresearch.py --skip-existing
+
+# With larger embedding batches (faster)
+uv run python scripts/ingest_ethresearch.py --skip-existing --batch-size 256
+```
+
+The sync/ingest separation allows you to:
+- Re-chunk or re-embed without re-downloading
+- Resume after interruption
+- Update only changed content with incremental sync
+
 ## Next steps
 
 - Read [CONCEPTS.md](CONCEPTS.md) to understand EIPs and RAG terminology

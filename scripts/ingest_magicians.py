@@ -120,6 +120,9 @@ async def ingest_magicians(
                 )
                 topics_skipped += 1
 
+        # Rebuild vector index after bulk insert
+        await store.reindex_embeddings()
+
     finally:
         await store.close()
 

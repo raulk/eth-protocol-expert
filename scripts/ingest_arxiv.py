@@ -104,6 +104,9 @@ async def ingest_arxiv(max_papers: int = 300) -> None:
                 quality=round(quality.overall, 3),
             )
 
+        # Rebuild vector index after bulk insert
+        await store.reindex_embeddings()
+
     finally:
         fetcher.close()
         extractor.close()

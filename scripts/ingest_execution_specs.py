@@ -138,6 +138,9 @@ async def ingest_execution_specs() -> None:
                 chunks=len(embedded),
             )
 
+        # Rebuild vector index after bulk insert
+        await store.reindex_embeddings()
+
     finally:
         await store.close()
 

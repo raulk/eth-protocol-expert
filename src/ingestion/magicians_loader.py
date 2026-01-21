@@ -175,6 +175,7 @@ class MagiciansLoader:
             posts_count=topic.posts_count,
             created_at=topic.created_at,
             last_posted_at=topic.last_posted_at,
+            bumped_at=topic.bumped_at,
             posts=loaded_posts,
         )
 

@@ -25,7 +25,6 @@ class ConsensusSpecLoader:
     """Load consensus layer specs from ethereum/consensus-specs repository."""
 
     REPO_URL = "https://github.com/ethereum/consensus-specs.git"
-    FORKS = ["phase0", "altair", "bellatrix", "capella", "deneb", "electra"]
 
     def __init__(self, repo_path: str | Path = "data/consensus-specs") -> None:
         self.repo_path = Path(repo_path)
@@ -60,6 +59,35 @@ class ConsensusSpecLoader:
         )
         return result.stdout.strip()
 
+    def _discover_spec_dirs(self) -> list[tuple[Path, str]]:
+        """Discover all spec directories dynamically.
+
+        Returns list of (directory_path, fork_name) tuples.
+        Includes main forks and _features subdirectories.
+        """
+        specs_dir = self.repo_path / "specs"
+        if not specs_dir.exists():
+            return []
+
+        result: list[tuple[Path, str]] = []
+
+        for item in specs_dir.iterdir():
+            if not item.is_dir():
+                continue
+
+            if item.name.startswith("."):
+                continue
+
+            if item.name == "_features":
+                # Index each feature subdirectory with "feature-" prefix
+                for feature_dir in item.iterdir():
+                    if feature_dir.is_dir() and not feature_dir.name.startswith("."):
+                        result.append((feature_dir, f"feature-{feature_dir.name}"))
+            else:
+                result.append((item, item.name))
+
+        return result
+
     def load_all_specs(self) -> list[ConsensusSpec]:
         """Load all specification files from the repository."""
         specs: list[ConsensusSpec] = []
@@ -69,16 +97,15 @@ class ConsensusSpecLoader:
             logger.warning("specs_dir_not_found", path=str(specs_dir))
             return specs
 
-        for fork in self.FORKS:
-            fork_dir = specs_dir / fork
-            if not fork_dir.exists():
-                continue
+        spec_dirs = self._discover_spec_dirs()
+        logger.info("discovered_spec_dirs", count=len(spec_dirs))
 
+        for fork_dir, fork_name in spec_dirs:
             for md_file in fork_dir.glob("*.md"):
-                spec = self._parse_spec_file(md_file, fork)
+                spec = self._parse_spec_file(md_file, fork_name)
                 if spec:
                     specs.append(spec)
-                    logger.debug("loaded_spec", name=spec.name, fork=fork)
+                    logger.debug("loaded_spec", name=spec.name, fork=fork_name)
 
         logger.info("loaded_consensus_specs", count=len(specs))
         return specs

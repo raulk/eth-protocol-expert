@@ -123,6 +123,9 @@ async def ingest_acd_transcripts(
             total_chunks=total_chunks,
         )
 
+        # Rebuild vector index after bulk insert
+        await store.reindex_embeddings()
+
     finally:
         await store.close()
 

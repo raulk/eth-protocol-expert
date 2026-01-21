@@ -1,7 +1,8 @@
 from .acd_transcript_loader import ACDTranscript, ACDTranscriptLoader, SpeakerSegment
 from .arxiv_fetcher import ArxivFetcher, ArxivPaper
+from .cache import CacheEntry, RawContentCache
 from .consensus_spec_loader import ConsensusSpec, ConsensusSpecLoader
-from .discourse_client import DiscourseClient, DiscoursePost, DiscourseTopic
+from .discourse_client import DiscourseClient, DiscoursePost, DiscourseTopic, ForumStatistics
 from .eip_loader import EIPLoader
 from .eip_parser import EIPParser
 from .ethresearch_loader import EthresearchLoader, LoadedForumPost, LoadedForumTopic
@@ -18,6 +19,7 @@ __all__ = [
     "AdaptiveRateLimiter",
     "ArxivFetcher",
     "ArxivPaper",
+    "CacheEntry",
     "CodeRepository",
     "ConsensusSpec",
     "ConsensusSpecLoader",
@@ -27,6 +29,7 @@ __all__ = [
     "EIPLoader",
     "EIPParser",
     "EthresearchLoader",
+    "ForumStatistics",
     "ExecutionSpec",
     "ExecutionSpecLoader",
     "get_rate_limiter",
@@ -40,5 +43,6 @@ __all__ = [
     "QualityScore",
     "QualityScorer",
     "RateLimitState",
+    "RawContentCache",
     "SpeakerSegment",
 ]

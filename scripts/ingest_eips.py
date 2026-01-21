@@ -14,6 +14,7 @@ This script:
 
 import argparse
 import asyncio
+import os
 import sys
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from src.chunking.fixed_chunker import FixedChunker
 from src.chunking.section_chunker import SectionChunker
 from src.embeddings.local_embedder import LocalEmbedder
 from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.graph import EIPGraphBuilder, FalkorDBStore
 from src.ingestion.eip_loader import EIPLoader
 from src.ingestion.eip_parser import EIPParser
 from src.storage.pg_vector_store import PgVectorStore
@@ -107,7 +109,31 @@ async def ingest_eips(
 
         logger.info("chunking_complete", total_chunks=len(all_chunks), total_eips=len(parsed_eips))
 
-        # Step 4: Store all document metadata
+        # Step 4: Build EIP graph from relationship data
+        logger.info("building_eip_graph")
+        graph_store = FalkorDBStore(
+            host=os.environ.get("FALKORDB_HOST", "localhost"),
+            port=int(os.environ.get("FALKORDB_PORT", "6379")),
+        )
+        try:
+            graph_store.connect()
+            graph_store.initialize_schema()
+
+            builder = EIPGraphBuilder(graph_store)
+            graph_result = builder.build_from_eips(parsed_eips)
+            logger.info(
+                "graph_built",
+                nodes=graph_result.nodes_created,
+                relationships=graph_result.relationships_created,
+                requires=graph_result.requires_count,
+                supersedes=graph_result.supersedes_count,
+            )
+        except Exception as e:
+            logger.warning("graph_build_failed", error=str(e))
+        finally:
+            graph_store.close()
+
+        # Step 5: Store all document metadata
         logger.info("storing_documents")
         for parsed in parsed_eips:
             await store.store_document(
@@ -154,6 +180,9 @@ async def ingest_eips(
             chunks=final_chunks,
             git_commit=git_commit[:8],
         )
+
+        # Rebuild vector index after bulk insert
+        await store.reindex_embeddings()
 
     finally:
         await store.close()

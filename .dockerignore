@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+
+# Data and cache
+data/
+*.db
+*.sqlite
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Docs and plans
+*.md
+!README.md
+docs/
+PLAN*.md
+thoughts/
+
+# Frontend (built separately)
+app/node_modules/
+app/dist/
+app/.pnpm-store/
+
+# Environment
+.env
+.env.*
+
+# Tests
+tests/

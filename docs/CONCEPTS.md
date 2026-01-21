@@ -89,7 +89,7 @@ Embeddings are dense vector representations of text that capture semantic meanin
 ```
 
 This system uses:
-- **Voyage AI** (voyage-3) for document embeddings
+- **Voyage AI** (voyage-4-large) for document embeddings
 - **voyage-code-2** for source code embeddings
 
 ### Vector similarity search

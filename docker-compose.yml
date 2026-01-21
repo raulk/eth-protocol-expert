@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -18,5 +16,56 @@ services:
       timeout: 5s
       retries: 5
 
+  falkordb:
+    image: falkordb/falkordb:latest
+    container_name: eth-protocol-graph
+    expose:
+      - "6379"
+    volumes:
+      - falkordb_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: eth-protocol-api
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/eth_protocol
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      FALKORDB_HOST: falkordb
+      FALKORDB_PORT: 6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      falkordb:
+        condition: service_healthy
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: eth-protocol-app
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:3001:3000"
+
 volumes:
   pgdata:
+  falkordb_data:

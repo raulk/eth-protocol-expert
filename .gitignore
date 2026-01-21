@@ -76,6 +76,10 @@ data/eips/
 data/code/
 data/papers/
 data/transcripts/
+data/cache/
+data/consensus-specs/
+data/execution-specs/
+data/pm/
 
 # Model caches
 .cache/

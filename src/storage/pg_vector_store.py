@@ -427,3 +427,13 @@ class PgVectorStore:
         async with self.connection() as conn:
             await conn.execute("TRUNCATE chunks, documents RESTART IDENTITY CASCADE")
             logger.warning("cleared_all_data")
+
+    async def reindex_embeddings(self):
+        """Rebuild the vector similarity index.
+
+        IVFFlat indexes need rebuilding after bulk inserts for new data
+        to be properly indexed. Call this after ingestion completes.
+        """
+        async with self.connection() as conn:
+            await conn.execute("REINDEX INDEX chunks_embedding_idx")
+            logger.info("reindexed_embeddings")

@@ -51,6 +51,8 @@ This document describes the system architecture of the Ethereum Protocol Intelli
 
 ### Ingestion pipeline
 
+**Git-based sources** (EIPs, specs) are cached via local clones:
+
 ```
 GitHub (ethereum/EIPs)
         │
@@ -66,6 +68,37 @@ GitHub (ethereum/EIPs)
 │  (Storage)    │     │  (Voyage AI)  │     │   (Text)      │
 └───────────────┘     └───────────────┘     └───────────────┘
 ```
+
+**API-based sources** (forums, arXiv) use a two-stage sync/ingest pipeline:
+
+```
+Remote API (ethresear.ch)
+        │
+        ▼
+┌───────────────┐     ┌───────────────┐
+│     Sync      │ ──▶ │  Raw Content  │  data/cache/{source}/
+│  (Download)   │     │    Cache      │  ├── index.json
+└───────────────┘     └───────────────┘  └── topics/*.json
+                             │
+                             ▼
+┌───────────────┐     ┌───────────────┐     ┌───────────────┐
+│    Ingest     │ ◀── │   Producer    │ ──▶ │   Consumer    │
+│  (From cache) │     │  (Chunking)   │     │  (Embedding)  │
+└───────────────┘     └───────────────┘     └───────────────┘
+                             │                     │
+                             └──────────┬──────────┘
+                                        ▼
+                              ┌───────────────┐
+                              │   pgvector    │
+                              │  (Storage)    │
+                              └───────────────┘
+```
+
+The separation enables:
+- Re-chunking/re-embedding without re-downloading
+- Incremental sync using `bumped_at` timestamps
+- Pipelined processing (chunking overlaps with embedding)
+- Batched embeddings (128+ chunks per API call)
 
 ### Query pipeline
 
@@ -126,6 +159,10 @@ src/
 ├── ingestion/                 # Phase 0, 6, 10
 │   ├── eip_loader.py             # Clone and load EIPs from GitHub
 │   ├── eip_parser.py             # Parse markdown, extract frontmatter
+│   ├── cache.py                  # Raw content cache for API sources
+│   ├── discourse_client.py       # Discourse forum API client
+│   ├── ethresearch_loader.py     # ethresear.ch forum loader
+│   ├── magicians_loader.py       # Ethereum Magicians forum loader
 │   ├── acd_transcript_loader.py  # AllCoreDevs call transcripts
 │   ├── arxiv_fetcher.py          # Academic papers from arXiv
 │   ├── git_code_loader.py        # Ethereum client source code
@@ -138,7 +175,7 @@ src/
 │   └── code_chunker.py           # Function-level code splitting
 │
 ├── embeddings/                # Phase 0
-│   ├── voyage_embedder.py        # Voyage AI (voyage-3)
+│   ├── voyage_embedder.py        # Voyage AI (voyage-4-large)
 │   ├── local_embedder.py         # Local BGE model
 │   └── code_embedder.py          # Code-specific (voyage-code-2)
 │

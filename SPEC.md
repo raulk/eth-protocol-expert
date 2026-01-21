@@ -1389,7 +1389,7 @@ class EthereumGraphRAG:
         self.rag = GraphRAGSDK(
             graph=graph.graph,
             llm=llm_client,
-            embedding_model="voyage-3"
+            embedding_model="voyage-4-large"
         )
 
     async def query_with_context(
@@ -2665,8 +2665,8 @@ class TraceDebugger:
 
 ```python
 MODEL_REGISTRY = {
-    "voyage-3": ModelConfig(
-        provider="voyage", input_cost_per_1m=0.06, 
+    "voyage-4-large": ModelConfig(
+        provider="voyage", input_cost_per_1m=0.05,
         context_window=32000, supports_tools=False
     ),
     "haiku-3.5": ModelConfig(

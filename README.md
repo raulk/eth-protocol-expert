@@ -5,8 +5,10 @@ A production-grade RAG (Retrieval-Augmented Generation) system for Ethereum prot
 ## Features
 
 - **881 EIPs indexed** with 8,500+ semantic chunks
+- **2,900+ ethresear.ch forum topics** with research discussions
 - **Three query modes**: simple, cited, and NLI-validated
 - **Section-aware chunking** that respects EIP document structure
+- **Raw content cache** for efficient re-processing of API sources
 - **Citation tracking** with evidence ledgers and source attribution
 - **NLI validation** to flag unsupported or contradicted claims
 - **Concept resolution** with alias tables for Ethereum terminology
@@ -77,6 +79,16 @@ uv run python scripts/ingest_eips.py --use-section-chunking --batch-size 50
 uv run python scripts/ingest_eips.py --limit 50
 ```
 
+### 5b. Ingest forum discussions (optional)
+
+```bash
+# Sync ethresear.ch topics to local cache
+uv run python scripts/sync_ethresearch.py --max-topics 1000
+
+# Ingest cached topics into database
+uv run python scripts/ingest_ethresearch.py --skip-existing
+```
+
 ### 6. Query the system
 
 ```bash
@@ -97,6 +109,7 @@ uv run python scripts/query_cli.py "What is the base fee?" --mode validated
 | `simple` | Fast generation with retrieved context | Quick answers, exploration |
 | `cited` | Adds inline citations and source tracking | Research, documentation |
 | `validated` | NLI-based claim verification | High-stakes queries, fact-checking |
+| `agentic` | ReAct loop with multi-hop reasoning | Complex questions, cross-EIP analysis |
 
 ### Example output (validated mode)
 
@@ -134,7 +147,7 @@ eth-protocol-expert/
 │   │   └── code_chunker.py      # Function-level code chunking
 │   │
 │   ├── embeddings/          # Vector embeddings
-│   │   ├── voyage_embedder.py   # Voyage AI (voyage-3)
+│   │   ├── voyage_embedder.py   # Voyage AI (voyage-4-large)
 │   │   ├── local_embedder.py    # Local BGE model
 │   │   └── code_embedder.py     # Code-specific (voyage-code-2)
 │   │
@@ -196,12 +209,17 @@ eth-protocol-expert/
 │       └── main.py              # FastAPI application
 │
 ├── scripts/
-│   ├── ingest_eips.py       # EIP ingestion pipeline
-│   ├── query_cli.py         # Command-line query tool
-│   ├── test_e2e.py          # End-to-end test
-│   └── test_full_rag.py     # Full RAG pipeline test
+│   ├── ingest_eips.py           # EIP ingestion pipeline
+│   ├── sync_ethresearch.py      # Sync forum topics to cache
+│   ├── ingest_ethresearch.py    # Ingest forum from cache
+│   ├── query_cli.py             # Command-line query tool
+│   ├── test_e2e.py              # End-to-end test
+│   └── test_full_rag.py         # Full RAG pipeline test
 │
-├── data/eips/               # Cloned EIPs repository
+├── data/
+│   ├── eips/                    # Cloned EIPs repository
+│   └── cache/                   # Raw content cache for API sources
+│       └── ethresearch/         # Forum topics cache
 ├── docker-compose.yml       # PostgreSQL + pgvector
 └── pyproject.toml           # Dependencies and config
 ```
@@ -261,10 +279,12 @@ curl -X POST http://localhost:8000/query \
 uv run python scripts/query_cli.py --help
 
 Options:
-  --mode [simple|cited|validated]  Query mode (default: simple)
-  --top-k INTEGER                  Number of chunks to retrieve (default: 5)
+  --mode [simple|cited|validated|agentic]  Query mode (default: cited)
+  --top-k INTEGER                  Number of chunks to retrieve (default: 10)
   --no-sources                     Hide source citations
   --local                          Use local embeddings (no API)
+  --max-retrievals INTEGER         Max retrievals for agentic mode (default: 5)
+  --no-reasoning                   Hide reasoning chain for agentic mode
 ```
 
 ## Development

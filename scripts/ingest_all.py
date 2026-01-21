@@ -13,6 +13,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import structlog
+from dotenv import load_dotenv
+
+load_dotenv()
 
 structlog.configure(
     processors=[
@@ -139,6 +142,30 @@ async def ingest_all(
     return results
 
 
+async def reindex_database() -> bool:
+    """Rebuild vector indexes after bulk ingestion.
+
+    IVFFlat indexes need rebuilding after bulk inserts for new data
+    to be properly indexed in similarity searches.
+
+    Returns:
+        True if reindex succeeded, False otherwise
+    """
+    from src.storage import PgVectorStore
+
+    logger.info("reindexing_database")
+    try:
+        store = PgVectorStore()
+        await store.connect()
+        await store.reindex_embeddings()
+        await store.close()
+        logger.info("reindex_completed")
+        return True
+    except Exception as e:
+        logger.error("reindex_failed", error=str(e))
+        return False
+
+
 def print_summary(results: list[IngestionResult]) -> None:
     """Print a summary of all ingestion results."""
     print("\n" + "=" * 60)
@@ -224,6 +251,11 @@ def main() -> None:
     if failed:
         logger.error("some_ingestions_failed", failed=[r.name for r in failed])
         sys.exit(1)
+
+    # Rebuild vector indexes after bulk ingestion
+    reindex_success = asyncio.run(reindex_database())
+    if not reindex_success:
+        logger.warning("reindex_failed_but_ingestion_succeeded")
 
     logger.info("all_ingestions_completed_successfully")
 

@@ -9,19 +9,21 @@ from .evidence_span import EvidenceSpan
 
 class SupportLevel(Enum):
     """How strongly evidence supports a claim."""
-    STRONG = "strong"       # NLI entailment > 0.7
-    PARTIAL = "partial"     # NLI entailment 0.4-0.7
-    WEAK = "weak"           # NLI entailment < 0.4
-    NONE = "none"           # No supporting evidence
+
+    STRONG = "strong"  # NLI entailment > 0.7
+    PARTIAL = "partial"  # NLI entailment 0.4-0.7
+    WEAK = "weak"  # NLI entailment < 0.4
+    NONE = "none"  # No supporting evidence
     CONTRADICTION = "contradiction"  # Evidence contradicts claim
 
 
 @dataclass
 class Claim:
     """A single factual assertion in a response."""
+
     claim_id: str
     claim_text: str
-    claim_type: str           # factual | interpretive | synthetic
+    claim_type: str  # factual | interpretive | synthetic
 
     # Position in response
     start_offset: int
@@ -48,8 +50,9 @@ class Claim:
 @dataclass
 class ValidationResult:
     """Result of validating an evidence ledger."""
+
     is_valid: bool
-    coverage_ratio: float     # Fraction of claims with evidence
+    coverage_ratio: float  # Fraction of claims with evidence
     invalid_spans: list[tuple[str, EvidenceSpan]]  # (claim_id, span)
     unsupported_claims: list[str]  # claim_ids without evidence
     contradicted_claims: list[str]  # claim_ids with contradicting evidence
@@ -104,19 +107,13 @@ class EvidenceLedger:
 
     def get_unsupported_claims(self) -> list[Claim]:
         """Get claims without any evidence."""
-        return [
-            claim for claim in self.claims
-            if not self.evidence_map.get(claim.claim_id)
-        ]
+        return [claim for claim in self.claims if not self.evidence_map.get(claim.claim_id)]
 
     def compute_coverage(self) -> float:
         """Compute fraction of claims with at least one evidence span."""
         if not self.claims:
             return 1.0
-        supported = sum(
-            1 for claim in self.claims
-            if self.evidence_map.get(claim.claim_id)
-        )
+        supported = sum(1 for claim in self.claims if self.evidence_map.get(claim.claim_id))
         return supported / len(self.claims)
 
     def to_dict(self) -> dict:

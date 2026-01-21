@@ -14,20 +14,20 @@ class EvidenceSpan:
     """
 
     # Document identification
-    document_id: str          # Stable canonical ID (e.g., "eip-4844")
-    chunk_id: str             # Chunk within document
+    document_id: str  # Stable canonical ID (e.g., "eip-4844")
+    chunk_id: str  # Chunk within document
 
     # Span location within chunk
     start_offset: int | None  # Character offset (None = whole chunk)
-    end_offset: int | None    # Character offset (None = whole chunk)
+    end_offset: int | None  # Character offset (None = whole chunk)
 
     # Content snapshot
-    span_text: str            # Exact text for validation
-    span_hash: str            # SHA256 of span_text
+    span_text: str  # Exact text for validation
+    span_hash: str  # SHA256 of span_text
 
     # Source metadata
     section_path: str | None  # e.g., "Motivation > Background"
-    git_commit: str | None    # Revision hash for drift detection
+    git_commit: str | None  # Revision hash for drift detection
     retrieved_at: datetime = field(default_factory=datetime.utcnow)
 
     @classmethod
@@ -78,7 +78,7 @@ class EvidenceSpan:
     def validate_against(self, current_content: str) -> bool:
         """Verify the span still matches current corpus content."""
         if self.start_offset is not None and self.end_offset is not None:
-            current_span = current_content[self.start_offset:self.end_offset]
+            current_span = current_content[self.start_offset : self.end_offset]
         else:
             current_span = current_content
 

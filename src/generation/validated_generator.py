@@ -12,6 +12,7 @@ import structlog
 from ..evidence.evidence_ledger import Claim, EvidenceLedger, SupportLevel
 from ..evidence.evidence_span import EvidenceSpan
 from ..retrieval.simple_retriever import RetrievalResult, SimpleRetriever
+from ..validation.citation_enforcer import CitationEnforcer, ResponseVerifier
 from ..validation.claim_decomposer import ClaimDecomposer, HybridDecomposer
 from ..validation.nli_validator import CitationValidation, NLIValidator
 
@@ -21,6 +22,7 @@ logger = structlog.get_logger()
 @dataclass
 class ValidatedClaim:
     """A claim with its validation result."""
+
     claim: Claim
     validation: CitationValidation
     flagged: bool  # True if claim should be flagged in output
@@ -29,6 +31,7 @@ class ValidatedClaim:
 @dataclass
 class ValidatedGenerationResult:
     """Result from generation with validation."""
+
     query: str
     response: str
     validated_response: str  # Response with flags/warnings
@@ -46,6 +49,10 @@ class ValidatedGenerationResult:
     unsupported_claims: int = 0
     contradicted_claims: int = 0
 
+    # Phase 7: Citation enforcement
+    citation_compliant: bool = True
+    uncited_factual_claims: int = 0
+
     @property
     def support_ratio(self) -> float:
         """Ratio of supported claims."""
@@ -57,8 +64,7 @@ class ValidatedGenerationResult:
     def is_trustworthy(self) -> bool:
         """Whether the response is considered trustworthy."""
         return (
-            self.contradicted_claims == 0 and
-            self.support_ratio >= 0.7
+            self.contradicted_claims == 0 and self.support_ratio >= 0.7 and self.citation_compliant
         )
 
 
@@ -88,7 +94,7 @@ class ValidatedGenerator:
         self.client = anthropic.Anthropic(api_key=self.api_key)
 
         # Initialize validation components
-        self.nli_validator = NLIValidator(device=nli_device)
+        self.nli_validator = NLIValidator(device=nli_device, use_minimal_spans=True)
         self.use_decomposition = use_claim_decomposition
 
         if use_claim_decomposition:
@@ -97,6 +103,10 @@ class ValidatedGenerator:
             )
         else:
             self.decomposer = None
+
+        # Phase 7: Citation enforcement and response verification
+        self.citation_enforcer = CitationEnforcer()
+        self.response_verifier = ResponseVerifier()
 
     async def generate(
         self,
@@ -154,10 +164,28 @@ class ValidatedGenerator:
 
         # Calculate summary statistics
         total_claims = len(validations)
-        supported = sum(1 for v in validations if v.validation.support_level in [SupportLevel.STRONG, SupportLevel.PARTIAL])
+        supported = sum(
+            1
+            for v in validations
+            if v.validation.support_level in [SupportLevel.STRONG, SupportLevel.PARTIAL]
+        )
         weak = sum(1 for v in validations if v.validation.support_level == SupportLevel.WEAK)
         unsupported = sum(1 for v in validations if v.validation.support_level == SupportLevel.NONE)
-        contradicted = sum(1 for v in validations if v.validation.support_level == SupportLevel.CONTRADICTION)
+        contradicted = sum(
+            1 for v in validations if v.validation.support_level == SupportLevel.CONTRADICTION
+        )
+
+        # Phase 7: Citation enforcement
+        citation_result = self.citation_enforcer.enforce(evidence_ledger)
+
+        # Phase 7: Verify response (remove contradicted, tag unsupported)
+        if validate and validations:
+            verified_response, _removed = self.response_verifier.verify_response(
+                response=validated_response,
+                ledger=evidence_ledger,
+                validations=validations,
+            )
+            validated_response = verified_response
 
         logger.info(
             "generated_validated_response",
@@ -167,6 +195,8 @@ class ValidatedGenerator:
             weak=weak,
             unsupported=unsupported,
             contradicted=contradicted,
+            citation_compliant=citation_result.is_compliant,
+            uncited_factual=citation_result.uncited_factual,
             input_tokens=response.usage.input_tokens,
             output_tokens=response.usage.output_tokens,
         )
@@ -186,6 +216,8 @@ class ValidatedGenerator:
             weak_claims=weak,
             unsupported_claims=unsupported,
             contradicted_claims=contradicted,
+            citation_compliant=citation_result.is_compliant,
+            uncited_factual_claims=citation_result.uncited_factual,
         )
 
     def _format_context_with_markers(
@@ -204,9 +236,7 @@ class ValidatedGenerator:
             doc_id = chunk.document_id.upper()
             section = f" - {chunk.section_path}" if chunk.section_path else ""
 
-            context_parts.append(
-                f"{marker} {doc_id}{section}\n{chunk.content}"
-            )
+            context_parts.append(f"{marker} {doc_id}{section}\n{chunk.content}")
 
         context = "\n\n---\n\n".join(context_parts)
         return context, citation_map
@@ -288,8 +318,8 @@ Provide a clear, accurate answer with citations to the relevant sources."""
         response: str,
     ) -> list[tuple[str, list[str]]]:
         """Extract sentences and their citation markers."""
-        citation_pattern = re.compile(r'\[(\d+(?:\s*,\s*\d+)*)\]')
-        sentence_pattern = re.compile(r'([^.!?]+[.!?]+)')
+        citation_pattern = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
+        sentence_pattern = re.compile(r"([^.!?]+[.!?]+)")
 
         sentences = sentence_pattern.findall(response)
         if not sentences:
@@ -300,11 +330,11 @@ Provide a clear, accurate answer with citations to the relevant sources."""
             matches = citation_pattern.findall(sentence)
             citations = []
             for match in matches:
-                numbers = re.findall(r'\d+', match)
+                numbers = re.findall(r"\d+", match)
                 for num in numbers:
                     citations.append(f"[{num}]")
 
-            clean_sentence = citation_pattern.sub('', sentence).strip()
+            clean_sentence = citation_pattern.sub("", sentence).strip()
             results.append((clean_sentence, citations))
 
         return results
@@ -343,11 +373,13 @@ Provide a clear, accurate answer with citations to the relevant sources."""
                 SupportLevel.CONTRADICTION,
             ]
 
-            validations.append(ValidatedClaim(
-                claim=claim,
-                validation=validation,
-                flagged=flagged,
-            ))
+            validations.append(
+                ValidatedClaim(
+                    claim=claim,
+                    validation=validation,
+                    flagged=flagged,
+                )
+            )
 
         return validations
 
@@ -428,14 +460,16 @@ Provide a clear, accurate answer with citations to the relevant sources."""
                 SupportLevel.CONTRADICTION: "🚫",
             }.get(validation.support_level, "❓")
 
-            lines.extend([
-                "",
-                f"### {status_emoji} {claim.claim_id}",
-                f"**Claim**: {claim.claim_text}",
-                f"**Support Level**: {validation.support_level.value}",
-                f"**Confidence**: {validation.confidence:.2f}",
-                f"**Method**: {validation.validation_method}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    f"### {status_emoji} {claim.claim_id}",
+                    f"**Claim**: {claim.claim_text}",
+                    f"**Support Level**: {validation.support_level.value}",
+                    f"**Confidence**: {validation.confidence:.2f}",
+                    f"**Method**: {validation.validation_method}",
+                ]
+            )
 
             if validation.explanation:
                 lines.append(f"**Explanation**: {validation.explanation}")
@@ -444,6 +478,8 @@ Provide a clear, accurate answer with citations to the relevant sources."""
                 lines.append("**Atomic Facts**:")
                 for ar in validation.atomic_results:
                     fact_status = "✅" if ar.support_level == SupportLevel.STRONG else "⚠️"
-                    lines.append(f"  - {fact_status} {ar.fact.text} (entailment: {ar.nli_result.entailment:.2f})")
+                    lines.append(
+                        f"  - {fact_status} {ar.fact.text} (entailment: {ar.nli_result.entailment:.2f})"
+                    )
 
         return "\n".join(lines)

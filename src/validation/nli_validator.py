@@ -1,4 +1,10 @@
-"""NLI Validator - Validate citations using Natural Language Inference (Phase 2)."""
+"""NLI Validator - Validate citations using Natural Language Inference (Phase 2).
+
+Enhanced in Phase 7 with:
+- Minimal span validation for improved precision
+- Cross-encoder scoring for best span selection
+- Span-level grounding with character offsets
+"""
 
 from dataclasses import dataclass
 
@@ -14,9 +20,10 @@ logger = structlog.get_logger()
 @dataclass
 class NLIResult:
     """Result from NLI model inference."""
-    entailment: float    # Probability evidence entails claim
+
+    entailment: float  # Probability evidence entails claim
     contradiction: float  # Probability evidence contradicts claim
-    neutral: float       # Probability of neither
+    neutral: float  # Probability of neither
 
     @property
     def predicted_label(self) -> str:
@@ -31,6 +38,7 @@ class NLIResult:
 @dataclass
 class AtomicFact:
     """A single atomic, independently verifiable fact."""
+
     text: str
     source_claim: str
 
@@ -38,6 +46,7 @@ class AtomicFact:
 @dataclass
 class AtomicFactValidation:
     """Validation result for an atomic fact."""
+
     fact: AtomicFact
     nli_result: NLIResult
     support_level: SupportLevel
@@ -46,6 +55,7 @@ class AtomicFactValidation:
 @dataclass
 class CitationValidation:
     """Complete validation result for a claim-evidence pair."""
+
     claim_id: str
     claim_text: str
     support_level: SupportLevel
@@ -54,6 +64,9 @@ class CitationValidation:
     validation_method: str
     atomic_results: list[AtomicFactValidation]
     explanation: str | None = None
+    # Phase 7: Best supporting span
+    best_span: EvidenceSpan | None = None
+    best_span_score: float = 0.0
 
 
 class NLIValidator:
@@ -75,16 +88,19 @@ class NLIValidator:
         entailment_threshold: float = 0.7,
         contradiction_threshold: float = 0.7,
         weak_threshold: float = 0.4,
+        use_minimal_spans: bool = True,
     ):
         self.model_name = model_name
         self.entailment_threshold = entailment_threshold
         self.contradiction_threshold = contradiction_threshold
         self.weak_threshold = weak_threshold
+        self.use_minimal_spans = use_minimal_spans
 
         # Lazy load model
         self._model = None
         self._tokenizer = None
         self._device = device
+        self._span_selector = None
 
     def _load_model(self):
         """Lazy load the NLI model."""
@@ -106,6 +122,14 @@ class NLIValidator:
         self._model.eval()
 
         logger.info("nli_model_loaded", device=self._device)
+
+    def _get_span_selector(self):
+        """Lazy load span selector."""
+        if self._span_selector is None:
+            from ..evidence.span_selector import SpanSelector
+
+            self._span_selector = SpanSelector()
+        return self._span_selector
 
     def predict_nli(self, premise: str, hypothesis: str) -> NLIResult:
         """Run NLI inference.
@@ -171,22 +195,47 @@ class NLIValidator:
                 explanation="No evidence spans provided for this claim.",
             )
 
-        # Combine evidence texts
-        evidence_text = "\n\n".join(span.span_text for span in evidence_spans)
+        # Phase 7: Use minimal span validation if enabled
+        best_span = None
+        best_span_score = 0.0
+
+        if self.use_minimal_spans:
+            span_selector = self._get_span_selector()
+            scored_spans = span_selector.select_best_spans(
+                claim_text=claim.claim_text,
+                evidence_spans=evidence_spans,
+                top_n=3,
+            )
+            if scored_spans:
+                best_span = scored_spans[0].span
+                best_span_score = scored_spans[0].score
+                # Use only the best spans for validation
+                evidence_text = "\n\n".join(s.span.span_text for s in scored_spans)
+            else:
+                evidence_text = "\n\n".join(span.span_text for span in evidence_spans)
+        else:
+            # Combine evidence texts (original behavior)
+            evidence_text = "\n\n".join(span.span_text for span in evidence_spans)
 
         # If atomic facts provided, validate each
         if atomic_facts:
-            return self._validate_atomic_facts(
+            result = self._validate_atomic_facts(
                 claim=claim,
                 evidence_text=evidence_text,
                 atomic_facts=atomic_facts,
             )
+        else:
+            # Otherwise validate claim directly
+            result = self._validate_single_claim(
+                claim=claim,
+                evidence_text=evidence_text,
+            )
 
-        # Otherwise validate claim directly
-        return self._validate_single_claim(
-            claim=claim,
-            evidence_text=evidence_text,
-        )
+        # Add best span info to result
+        result.best_span = best_span
+        result.best_span_score = best_span_score
+
+        return result
 
     def _validate_single_claim(
         self,
@@ -261,11 +310,13 @@ class NLIValidator:
             else:
                 support = SupportLevel.WEAK
 
-            atomic_results.append(AtomicFactValidation(
-                fact=fact,
-                nli_result=nli_result,
-                support_level=support,
-            ))
+            atomic_results.append(
+                AtomicFactValidation(
+                    fact=fact,
+                    nli_result=nli_result,
+                    support_level=support,
+                )
+            )
 
         # Aggregate results
         return self._aggregate_atomic_results(claim, atomic_results)
@@ -288,7 +339,9 @@ class NLIValidator:
             )
 
         # Check for any contradictions
-        contradictions = [r for r in atomic_results if r.support_level == SupportLevel.CONTRADICTION]
+        contradictions = [
+            r for r in atomic_results if r.support_level == SupportLevel.CONTRADICTION
+        ]
         if contradictions:
             return CitationValidation(
                 claim_id=claim.claim_id,
@@ -324,7 +377,9 @@ class NLIValidator:
         else:
             support_level = SupportLevel.WEAK
             is_valid = False
-            explanation = f"Insufficient support ({weak_count} facts weakly supported out of {total})."
+            explanation = (
+                f"Insufficient support ({weak_count} facts weakly supported out of {total})."
+            )
 
         return CitationValidation(
             claim_id=claim.claim_id,

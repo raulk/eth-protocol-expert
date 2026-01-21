@@ -15,9 +15,9 @@ This version of the roadmap is structured for autonomous execution via ralph loo
 - [x] Phase 3b — Research Corpus
 - [x] Phase 4 — Continuous Ingestion
 - [x] Phase 5 — Graph Integration (FalkorDB)
-- [→] Phase 6 — Retrieval Upgrades
-- [ ] Phase 7 — Evidence & Validation Upgrades
-- [ ] Phase 8 — Reasoning & Agentic Retrieval
+- [x] Phase 6 — Retrieval Upgrades
+- [x] Phase 7 — Evidence & Validation Upgrades
+- [→] Phase 8 — Reasoning & Agentic Retrieval
 - [ ] Phase 9 — Ensemble & Routing
 - [ ] Phase 10 — Client Codebase Analysis
 
@@ -407,21 +407,31 @@ uv run python tests/eval/run_eval.py --phase 6
 **Dependencies**: Phase 6 retrieval.
 
 **Checklist**
-- [ ] Implement span-level grounding with character offsets
-- [ ] Add edge-case tests for markdown/code/tables
-- [ ] Implement best-span selection per claim using cross-encoder
-- [ ] Update NLI validator to validate against minimal spans
-- [ ] Implement dependency-aware claim decomposition
-- [ ] Add LLM fallback for complex sentences
-- [ ] Add citation enforcement (flag uncited factual sentences)
-- [ ] Add verifier pass to remove/tag unsupported claims
-- [ ] Run eval and compare citation accuracy vs baseline
+- [x] Implement span-level grounding with character offsets - EvidenceSpan.from_substring with start/end offsets
+- [x] Add edge-case tests for markdown/code/tables - tests/validation/test_span_edge_cases.py (11 tests)
+- [x] Implement best-span selection per claim using cross-encoder - SpanSelector class
+- [x] Update NLI validator to validate against minimal spans - use_minimal_spans=True
+- [x] Implement dependency-aware claim decomposition - HybridDecomposer with LLM fallback
+- [x] Add LLM fallback for complex sentences - ClaimDecomposer in HybridDecomposer
+- [x] Add citation enforcement (flag uncited factual sentences) - CitationEnforcer class
+- [x] Add verifier pass to remove/tag unsupported claims - ResponseVerifier class
+- [x] Run eval and compare citation accuracy vs baseline - e2e test passes
+
+**Implementation Notes**:
+- `SpanSelector`: Extracts candidate spans via sentence, window, and paragraph strategies
+- `MarkdownSpanExtractor`: Handles code blocks and tables as atomic units
+- `CitationEnforcer`: Detects uncited factual claims using pattern matching
+- `ResponseVerifier`: Removes contradicted claims, tags unsupported ones
+- All tests pass (11 span edge-case tests)
 
 **Files to create/modify**
 - `src/generation/validated_generator.py`
 - `src/validation/nli_validator.py`
 - `src/validation/claim_decomposer.py`
+- `src/validation/citation_enforcer.py` (new)
 - `src/evidence/evidence_span.py`
+- `src/evidence/span_selector.py` (new)
+- `tests/validation/test_span_edge_cases.py` (new)
 
 **Validation**
 ```bash

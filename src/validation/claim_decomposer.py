@@ -152,11 +152,11 @@ class RuleBasedDecomposer:
     """
 
     COMPOUND_PATTERNS: ClassVar[list[str]] = [
-        r'\band\b',
-        r'\bwhich\b',
-        r'\bthat\b',
-        r',\s*(?:and|or)\s*',
-        r';\s*',
+        r"\band\b",
+        r"\bwhich\b",
+        r"\bthat\b",
+        r",\s*(?:and|or)\s*",
+        r";\s*",
     ]
 
     def is_atomic(self, claim_text: str) -> bool:
@@ -178,7 +178,7 @@ class RuleBasedDecomposer:
         facts = []
 
         # Split on "and"
-        parts = re.split(r'\s+and\s+', claim_text, flags=re.IGNORECASE)
+        parts = re.split(r"\s+and\s+", claim_text, flags=re.IGNORECASE)
         if len(parts) > 1:
             for part in parts:
                 part = part.strip()

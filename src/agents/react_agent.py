@@ -1,4 +1,10 @@
-"""ReAct Agent - Reasoning and Acting loop for agentic retrieval."""
+"""ReAct Agent - Reasoning and Acting loop for agentic retrieval.
+
+Phase 8 enhancements:
+- Adaptive budget selection based on query complexity analysis
+- Integration with QueryAnalyzer for automatic mode selection
+- Dynamic retrieval strategy based on query characteristics
+"""
 
 import asyncio
 import os
@@ -10,6 +16,7 @@ import structlog
 
 from src.agents.backtrack import Backtracker
 from src.agents.budget_enforcer import AgentBudget, BudgetEnforcer
+from src.agents.query_analyzer import QueryAnalyzer
 from src.agents.reflection import Reflector
 from src.agents.retrieval_tool import RetrievalMode, RetrievalTool
 
@@ -163,11 +170,14 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
         model: str = "claude-sonnet-4-20250514",
         enable_reflection: bool = True,
         enable_backtracking: bool = True,
+        enable_adaptive_budget: bool = True,
     ):
         self.retrieval_tool = retrieval_tool
         self.budget = budget or AgentBudget()
         self.budget_enforcer = BudgetEnforcer(self.budget)
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
+        self.enable_adaptive_budget = enable_adaptive_budget
+        self.query_analyzer = QueryAnalyzer() if enable_adaptive_budget else None
 
         if not self.api_key:
             raise ValueError("ANTHROPIC_API_KEY not set")
@@ -197,13 +207,43 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
         Returns:
             AgentResult with answer and metadata
         """
+        # Phase 8: Adaptive budget selection based on query complexity
+        query_analysis = None
+        effective_budget = self.budget
+        preferred_mode = RetrievalMode.HYBRID
+
+        if self.query_analyzer and self.enable_adaptive_budget:
+            query_analysis = self.query_analyzer.analyze(query)
+            effective_budget = query_analysis.suggested_budget
+
+            # Map suggested mode to RetrievalMode
+            mode_map = {
+                "simple": RetrievalMode.VECTOR,
+                "hybrid": RetrievalMode.HYBRID,
+                "graph": RetrievalMode.GRAPH,
+                "agentic": RetrievalMode.HYBRID,
+            }
+            preferred_mode = mode_map.get(query_analysis.suggested_mode, RetrievalMode.HYBRID)
+
+            logger.info(
+                "query_analyzed",
+                query=query[:50],
+                complexity=query_analysis.complexity.value,
+                signals=query_analysis.signals,
+                suggested_mode=query_analysis.suggested_mode,
+                budget_retrievals=effective_budget.max_retrievals,
+            )
+
+        # Use effective budget (either provided or from analysis)
+        self.budget_enforcer = BudgetEnforcer(effective_budget)
         self.budget_enforcer.reset()
+
         if self.backtracker:
             self.backtracker.reset()
 
         state = AgentState(
             query=query,
-            budget_remaining=self.budget.max_retrievals,
+            budget_remaining=effective_budget.max_retrievals,
         )
 
         llm_calls = 0
@@ -241,9 +281,10 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
                 )
 
             elif action == AgentAction.RETRIEVE:
+                # Use preferred mode from query analysis (Phase 8)
                 retrieval_result = await self.retrieval_tool.execute(
                     query=action_input,
-                    mode=RetrievalMode.HYBRID,
+                    mode=preferred_mode,
                     limit=5,
                 )
 

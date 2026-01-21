@@ -9,6 +9,7 @@ Provides ReAct-based intelligent retrieval with:
 
 from src.agents.backtrack import BacktrackDecision, Backtracker
 from src.agents.budget_enforcer import AgentBudget, BudgetEnforcer, BudgetUsage
+from src.agents.query_analyzer import QueryAnalysis, QueryAnalyzer, QueryComplexity
 from src.agents.react_agent import AgentAction, AgentResult, AgentState, ReactAgent, Thought
 from src.agents.reflection import ReflectionResult, Reflector
 from src.agents.retrieval_tool import (
@@ -27,6 +28,9 @@ __all__ = [
     "Backtracker",
     "BudgetEnforcer",
     "BudgetUsage",
+    "QueryAnalysis",
+    "QueryAnalyzer",
+    "QueryComplexity",
     "ReactAgent",
     "ReflectionResult",
     "Reflector",

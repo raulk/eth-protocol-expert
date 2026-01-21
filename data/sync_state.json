@@ -1,0 +1,15 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-01-21T21:23:46.179362+00:00",
+  "sources": {
+    "research": {
+      "source_name": "research",
+      "last_sync": "2026-01-21T21:23:46.179345+00:00",
+      "last_commit": "c003fe1c1a785797e7b53e3cbf9569b989be6e93",
+      "last_cursor": null,
+      "docs_synced": 1,
+      "errors": 0,
+      "metadata": {}
+    }
+  }
+}

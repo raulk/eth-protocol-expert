@@ -21,6 +21,14 @@ from .execution_spec_loader import ExecutionSpec, ExecutionSpecLoader
 from .git_code_loader import CodeRepository, GitCodeLoader
 from .magicians_loader import MagiciansLoader
 from .markdown_spec_loader import MarkdownSpec, MarkdownSpecLoader
+from .orchestrator import (
+    ArxivSyncer,
+    DiscourseSyncer,
+    GitHubSyncer,
+    IngestionOrchestrator,
+    SourceSyncState,
+    SyncState,
+)
 from .pdf_extractor import PDFContent, PDFExtractor, PDFSection
 from .portal_spec_loader import PortalSpecLoader
 from .quality_scorer import QualityScore, QualityScorer
@@ -34,6 +42,7 @@ __all__ = [
     "AdaptiveRateLimiter",
     "ArxivFetcher",
     "ArxivPaper",
+    "ArxivSyncer",
     "BeaconAPIsLoader",
     "BuilderSpecsLoader",
     "CacheEntry",
@@ -43,6 +52,7 @@ __all__ = [
     "DevP2PLoader",
     "DiscourseClient",
     "DiscoursePost",
+    "DiscourseSyncer",
     "DiscourseTopic",
     "EIPLoader",
     "EIPParser",
@@ -53,6 +63,8 @@ __all__ = [
     "ExecutionSpecLoader",
     "ForumStatistics",
     "GitCodeLoader",
+    "GitHubSyncer",
+    "IngestionOrchestrator",
     "JSONRPCMethod",
     "JSONRPCSchema",
     "LoadedERC",
@@ -75,6 +87,8 @@ __all__ = [
     "RIPLoader",
     "RateLimitState",
     "RawContentCache",
+    "SourceSyncState",
     "SpeakerSegment",
+    "SyncState",
     "get_rate_limiter",
 ]

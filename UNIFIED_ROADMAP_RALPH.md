@@ -13,8 +13,8 @@ This version of the roadmap is structured for autonomous execution via ralph loo
 - [x] Phase 2c — Extended Corpus: APIs
 - [x] Phase 3a — Forum Corpus
 - [x] Phase 3b — Research Corpus
-- [→] Phase 4 — Continuous Ingestion
-- [ ] Phase 5 — Graph Integration (FalkorDB)
+- [x] Phase 4 — Continuous Ingestion
+- [→] Phase 5 — Graph Integration (FalkorDB)
 - [ ] Phase 6 — Retrieval Upgrades
 - [ ] Phase 7 — Evidence & Validation Upgrades
 - [ ] Phase 8 — Reasoning & Agentic Retrieval
@@ -291,15 +291,20 @@ uv run python scripts/query_cli.py "What is danksharding?" --mode simple
 **Dependencies**: Phases 1-3 complete.
 
 **Checklist**
-- [ ] Create `src/ingestion/orchestrator.py` with sync state management
-- [ ] Create `data/sync_state.json` schema
-- [ ] Implement GitHub syncer (poll for new commits)
-- [ ] Implement arXiv syncer (poll for new papers)
-- [ ] Implement Discourse syncer (incremental topic fetch)
-- [ ] Create `scripts/continuous_ingestion.py` orchestration script
-- [ ] Add metrics emission (duration, docs synced, errors)
-- [ ] Run incremental sync and verify only new content ingested
+- [x] Create `src/ingestion/orchestrator.py` with sync state management
+- [x] Create `data/sync_state.json` schema - auto-created on first run
+- [x] Implement GitHub syncer (poll for new commits) - GitHubSyncer class
+- [x] Implement arXiv syncer (poll for new papers) - ArxivSyncer class
+- [x] Implement Discourse syncer (incremental topic fetch) - DiscourseSyncer class
+- [x] Create `scripts/continuous_ingestion.py` orchestration script
+- [x] Add metrics emission (duration, docs synced, errors) - logged at sync_complete
+- [x] Run incremental sync and verify only new content ingested - "already_up_to_date" works
 - [ ] Optional: Add webhook endpoints in `src/api/main.py`
+
+**Implementation Notes**:
+- Orchestrator tracks per-source state with last_sync, last_commit, last_cursor
+- Second run correctly detects unchanged repos and skips re-ingestion
+- Supports --sources flag for selective syncing
 
 **Files to create/modify**
 - `src/ingestion/orchestrator.py` (new)

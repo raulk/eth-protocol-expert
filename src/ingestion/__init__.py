@@ -25,6 +25,7 @@ from .pdf_extractor import PDFContent, PDFExtractor, PDFSection
 from .portal_spec_loader import PortalSpecLoader
 from .quality_scorer import QualityScore, QualityScorer
 from .rate_limiter import AdaptiveRateLimiter, RateLimitState, get_rate_limiter
+from .research_loader import ResearchDoc, ResearchLoader
 from .rip_loader import LoadedRIP, RIPLoader
 
 __all__ = [
@@ -69,6 +70,8 @@ __all__ = [
     "PortalSpecLoader",
     "QualityScore",
     "QualityScorer",
+    "ResearchDoc",
+    "ResearchLoader",
     "RIPLoader",
     "RateLimitState",
     "RawContentCache",

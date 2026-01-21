@@ -123,3 +123,4 @@ site/
 # uv
 .uv/
 uv.lock.bak
+data/research/

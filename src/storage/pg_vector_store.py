@@ -179,6 +179,10 @@ class PgVectorStore:
                 for ec in embedded_chunks:
                     # Remove null bytes that can occur in PDF extraction
                     clean_content = ec.chunk.content.replace("\x00", "") if ec.chunk.content else ""
+                    # Truncate section_path to fit VARCHAR(256)
+                    section_path = ec.chunk.section_path
+                    if section_path and len(section_path) > 250:
+                        section_path = section_path[:247] + "..."
                     # Merge chunk-specific metadata with provided metadata
                     chunk_meta = getattr(ec.chunk, "metadata", {}) or {}
                     merged_meta = {**(metadata or {}), **chunk_meta}
@@ -200,7 +204,7 @@ class PgVectorStore:
                         clean_content,
                         ec.chunk.token_count,
                         ec.chunk.chunk_index,
-                        ec.chunk.section_path,
+                        section_path,
                         ec.embedding,
                         git_commit,
                         json.dumps(merged_meta),

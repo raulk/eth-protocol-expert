@@ -12,8 +12,8 @@ This version of the roadmap is structured for autonomous execution via ralph loo
 - [x] Phase 2b — Extended Corpus: Protocol Specs
 - [x] Phase 2c — Extended Corpus: APIs
 - [x] Phase 3a — Forum Corpus
-- [→] Phase 3b — Research Corpus
-- [ ] Phase 4 — Continuous Ingestion
+- [x] Phase 3b — Research Corpus
+- [→] Phase 4 — Continuous Ingestion
 - [ ] Phase 5 — Graph Integration (FalkorDB)
 - [ ] Phase 6 — Retrieval Upgrades
 - [ ] Phase 7 — Evidence & Validation Upgrades
@@ -251,14 +251,19 @@ uv run python scripts/query_cli.py "What are the tradeoffs of statelessness?" --
 **Dependencies**: Phase 1 complete (cache layer).
 
 **Checklist**
-- [ ] Verify `src/ingestion/arxiv_fetcher.py` exists with PDF extraction
-- [ ] Verify `src/ingestion/pdf_extractor.py` exists with quality scoring
-- [ ] Run arXiv ingestion (`uv run python scripts/ingest_arxiv.py`)
-- [ ] Verify PDF extraction quality scores meet threshold (>0.5)
-- [ ] Create `src/ingestion/research_loader.py` for ethereum/research repo
-- [ ] Create `scripts/ingest_research.py`
-- [ ] Run research repo ingestion
-- [ ] Test query returns academic paper results
+- [x] Verify `src/ingestion/arxiv_fetcher.py` exists with PDF extraction
+- [x] Verify `src/ingestion/pdf_extractor.py` exists with quality scoring
+- [x] Run arXiv ingestion (`uv run python scripts/ingest_arxiv.py`) - 289 arxiv papers (19 new)
+- [x] Verify PDF extraction quality scores meet threshold (>0.5) - all scores > 0.8
+- [x] Create `src/ingestion/research_loader.py` for ethereum/research repo
+- [x] Create `scripts/ingest_research.py`
+- [x] Run research repo ingestion - 233 docs (12 markdown + 221 Python)
+- [x] Test query returns academic paper results - danksharding query works
+
+**Corpus Statistics (Phase 3b complete)**:
+- arxiv_paper: 289 documents
+- research: 233 documents
+- Total chunks: 73,249
 
 **Files to create/modify**
 - `src/ingestion/arxiv_fetcher.py` (verify)

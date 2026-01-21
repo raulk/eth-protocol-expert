@@ -6,6 +6,7 @@ from .budget_manager import (
     BudgetManager,
     BudgetUsage,
 )
+from .code_retriever import CodeRetrievalResult, CodeRetriever, CodeSearchResult
 from .graph_augmented import GraphAugmentedResult, GraphAugmentedRetriever
 from .hybrid_retriever import HybridResult, HybridRetrievalResult, HybridRetriever
 from .reranker import CohereReranker, RerankedHybridRetriever, RerankResult
@@ -24,6 +25,9 @@ __all__ = [
     "BudgetConfig",
     "BudgetManager",
     "BudgetUsage",
+    "CodeRetrievalResult",
+    "CodeRetriever",
+    "CodeSearchResult",
     "CohereReranker",
     "GraphAugmentedResult",
     "GraphAugmentedRetriever",

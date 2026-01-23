@@ -94,7 +94,7 @@ class PgVectorStore:
             await conn.execute(f"""
                 CREATE TABLE IF NOT EXISTS chunks (
                     id SERIAL PRIMARY KEY,
-                    chunk_id VARCHAR(64) UNIQUE NOT NULL,
+                    chunk_id VARCHAR(512) UNIQUE NOT NULL,
                     document_id VARCHAR(128) NOT NULL,
                     content TEXT NOT NULL,
                     token_count INTEGER NOT NULL,

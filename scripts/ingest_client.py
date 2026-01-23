@@ -5,19 +5,21 @@ Usage:
     python scripts/ingest_client.py --repo go-ethereum
     python scripts/ingest_client.py --repo prysm --language go
     python scripts/ingest_client.py --repo reth --language rust
+    python scripts/ingest_client.py --repo all  # Ingest all clients in parallel
 
 This script:
 1. Clones/updates the client repository
-2. Parses Go/Rust source files using tree-sitter
+2. Parses Go/Rust source files using tree-sitter (concurrent)
 3. Extracts code units (functions, structs, methods)
-4. Generates embeddings for code content
-5. Links implementations to EIP specifications
+4. Generates embeddings for code content (concurrent batches)
+5. Links implementations to EIP specifications (concurrent)
 """
 
 import argparse
 import asyncio
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -28,7 +30,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking import Chunk
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings.voyage_embedder import EmbeddedChunk, VoyageEmbedder
 from src.graph import FalkorDBStore, SpecImplLinker
 from src.parsing import CodeUnit, CodeUnitExtractor, TreeSitterParser
 from src.storage.pg_vector_store import PgVectorStore
@@ -40,6 +42,11 @@ structlog.configure(
     ]
 )
 logger = structlog.get_logger()
+
+# Concurrency limits
+MAX_PARSE_WORKERS = 8  # CPU-bound parsing
+MAX_EMBED_CONCURRENT = 4  # API rate limiting
+MAX_EIP_CONCURRENT = 3  # Graph DB connections
 
 
 @dataclass
@@ -140,6 +147,136 @@ def find_source_files(repo_path: Path, repo: ClientRepo) -> list[Path]:
     return files
 
 
+def parse_single_file(file_path: str, language: str) -> list[CodeUnit]:
+    """Parse a single file and extract code units. Runs in subprocess."""
+    try:
+        parser = TreeSitterParser(languages=[language])
+        extractor = CodeUnitExtractor()
+        parsed_file = parser.parse_file(file_path)
+        return extractor.extract_all(parsed_file)
+    except Exception:
+        return []
+
+
+def parse_files_concurrent(
+    source_files: list[Path],
+    language: str,
+    max_workers: int = MAX_PARSE_WORKERS,
+) -> tuple[list[CodeUnit], int, int]:
+    """Parse files concurrently using ProcessPoolExecutor."""
+    all_units: list[CodeUnit] = []
+    parsed_count = 0
+    error_count = 0
+
+    file_paths = [str(f) for f in source_files]
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        futures = [executor.submit(parse_single_file, fp, language) for fp in file_paths]
+
+        for future in as_completed(futures):
+            try:
+                units = future.result()
+                if units:
+                    all_units.extend(units)
+                    parsed_count += 1
+                else:
+                    error_count += 1
+            except Exception:
+                error_count += 1
+
+            total_done = parsed_count + error_count
+            if total_done % 100 == 0:
+                logger.info(
+                    "parsing_progress",
+                    parsed=parsed_count,
+                    errors=error_count,
+                    total=len(source_files),
+                    units=len(all_units),
+                )
+
+    return all_units, parsed_count, error_count
+
+
+async def embed_batch_async(
+    embedder: VoyageEmbedder,
+    chunks: list[Chunk],
+    semaphore: asyncio.Semaphore,
+) -> list[EmbeddedChunk]:
+    """Embed a batch of chunks with semaphore-limited concurrency."""
+    async with semaphore:
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(None, embedder.embed_chunks, chunks)
+
+
+async def embed_chunks_concurrent(
+    embedder: VoyageEmbedder,
+    all_chunks: list[Chunk],
+    batch_size: int = 64,
+    max_concurrent: int = MAX_EMBED_CONCURRENT,
+) -> list[EmbeddedChunk]:
+    """Embed chunks with concurrent API calls."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    all_embedded: list[EmbeddedChunk] = []
+
+    # Split into batches
+    batches = [all_chunks[i : i + batch_size] for i in range(0, len(all_chunks), batch_size)]
+
+    logger.info("embedding_concurrent", total_chunks=len(all_chunks), batches=len(batches))
+
+    # Process batches concurrently
+    tasks = [embed_batch_async(embedder, batch, semaphore) for batch in batches]
+
+    completed = 0
+    for coro in asyncio.as_completed(tasks):
+        result = await coro
+        all_embedded.extend(result)
+        completed += 1
+        if completed % 10 == 0 or completed == len(batches):
+            logger.info(
+                "embedding_progress",
+                batches_done=completed,
+                total_batches=len(batches),
+                chunks_embedded=len(all_embedded),
+            )
+
+    return all_embedded
+
+
+async def link_eip_async(
+    eip: int,
+    linker: SpecImplLinker,
+    codebase_files: dict[str, str],
+    semaphore: asyncio.Semaphore,
+) -> tuple[int, int, str | None]:
+    """Link a single EIP with semaphore-limited concurrency."""
+    async with semaphore:
+        links = await linker.find_implementations(eip, codebase_files)
+        top_func = links[0].function_name if links else None
+        return eip, len(links), top_func
+
+
+async def link_eips_concurrent(
+    linker: SpecImplLinker,
+    codebase_files: dict[str, str],
+    eip_numbers: list[int],
+    max_concurrent: int = MAX_EIP_CONCURRENT,
+) -> None:
+    """Link multiple EIPs concurrently."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+
+    tasks = [link_eip_async(eip, linker, codebase_files, semaphore) for eip in eip_numbers]
+
+    for coro in asyncio.as_completed(tasks):
+        eip, count, top_func = await coro
+        if count > 0:
+            logger.info(
+                "eip_linked",
+                eip=eip,
+                implementations=count,
+                top_function=top_func,
+            )
+
+
 def code_unit_to_chunk(
     unit: CodeUnit,
     repo_name: str,
@@ -158,21 +295,10 @@ def code_unit_to_chunk(
         document_id=f"code:{repo_name}",
         content=unit.content,
         token_count=len(unit.content.split()),
-        position=unit.line_range[0],
+        chunk_index=unit.line_range[0],
         section_path=relative_path,
-        metadata={
-            "content_type": "code",
-            "repository": repo_name,
-            "language": language,
-            "file_path": relative_path,
-            "name": unit.name,
-            "unit_type": unit.unit_type.value,
-            "start_line": unit.line_range[0],
-            "end_line": unit.line_range[1],
-            "dependencies": unit.dependencies,
-            "git_commit": git_commit,
-            "indexed_at": datetime.now(UTC).isoformat(),
-        },
+        start_offset=unit.line_range[0],
+        end_offset=unit.line_range[1],
     )
 
 
@@ -183,8 +309,10 @@ async def ingest_client(
     limit: int | None = None,
     link_eips: bool = True,
     eip_numbers: list[int] | None = None,
+    parse_workers: int = MAX_PARSE_WORKERS,
+    embed_concurrent: int = MAX_EMBED_CONCURRENT,
 ):
-    """Main ingestion pipeline for a client codebase."""
+    """Main ingestion pipeline for a client codebase with concurrent processing."""
     load_dotenv()
 
     if repo_name not in KNOWN_REPOS:
@@ -195,7 +323,13 @@ async def ingest_client(
     data_path = Path(data_dir)
     data_path.mkdir(parents=True, exist_ok=True)
 
-    logger.info("starting_client_ingestion", repo=repo_name, language=repo.language)
+    logger.info(
+        "starting_client_ingestion",
+        repo=repo_name,
+        language=repo.language,
+        parse_workers=parse_workers,
+        embed_concurrent=embed_concurrent,
+    )
 
     git_commit = clone_or_update_repo(repo, data_path)
     logger.info("repo_ready", commit=git_commit[:8])
@@ -208,31 +342,11 @@ async def ingest_client(
         source_files = source_files[:limit]
         logger.info("limiting_to", count=limit)
 
-    parser = TreeSitterParser(languages=[repo.language])
-    extractor = CodeUnitExtractor()
-
-    logger.info("parsing_source_files")
-    all_units: list[CodeUnit] = []
-    parsed_count = 0
-    error_count = 0
-
-    for file_path in source_files:
-        try:
-            parsed_file = parser.parse_file(str(file_path))
-            units = extractor.extract_all(parsed_file)
-            all_units.extend(units)
-            parsed_count += 1
-
-            if parsed_count % 100 == 0:
-                logger.info(
-                    "parsing_progress",
-                    parsed=parsed_count,
-                    total=len(source_files),
-                    units=len(all_units),
-                )
-        except Exception as e:
-            error_count += 1
-            logger.warning("parse_error", file=str(file_path), error=str(e))
+    # Concurrent parsing
+    logger.info("parsing_source_files_concurrent", workers=parse_workers)
+    all_units, parsed_count, error_count = parse_files_concurrent(
+        source_files, repo.language, max_workers=parse_workers
+    )
 
     logger.info(
         "parsing_complete",
@@ -267,26 +381,22 @@ async def ingest_client(
             git_commit=git_commit,
         )
 
-        logger.info("embedding_code_units", total=len(all_chunks))
-        embed_batch_size = 64
-        all_embedded = []
+        # Concurrent embedding
+        logger.info(
+            "embedding_code_units_concurrent",
+            total=len(all_chunks),
+            concurrent_batches=embed_concurrent,
+        )
+        all_embedded = await embed_chunks_concurrent(
+            embedder, all_chunks, batch_size=64, max_concurrent=embed_concurrent
+        )
 
-        for i in range(0, len(all_chunks), embed_batch_size):
-            batch = all_chunks[i : i + embed_batch_size]
-            embedded = embedder.embed_chunks(batch)
-            all_embedded.extend(embedded)
-
-            if len(all_embedded) >= batch_size * 4:
-                await store.store_embedded_chunks(all_embedded, git_commit)
-                all_embedded = []
-                logger.info(
-                    "embedding_progress",
-                    embedded=i + len(batch),
-                    total=len(all_chunks),
-                )
-
-        if all_embedded:
-            await store.store_embedded_chunks(all_embedded, git_commit)
+        # Store in batches
+        store_batch_size = batch_size * 4
+        for i in range(0, len(all_embedded), store_batch_size):
+            batch = all_embedded[i : i + store_batch_size]
+            await store.store_embedded_chunks(batch, git_commit)
+            logger.info("stored_chunks", count=len(batch), progress=i + len(batch))
 
         final_chunks = await store.count_chunks()
         logger.info(
@@ -298,7 +408,7 @@ async def ingest_client(
         )
 
         if link_eips:
-            logger.info("linking_eips_to_implementations")
+            logger.info("linking_eips_to_implementations_concurrent")
 
             codebase_files: dict[str, str] = {}
             for file_path in source_files[:500]:
@@ -316,15 +426,10 @@ async def ingest_client(
 
                 eips_to_link = eip_numbers or [1559, 4844, 4895, 2718, 2930, 3675, 7516]
 
-                for eip in eips_to_link:
-                    links = await linker.find_implementations(eip, codebase_files)
-                    if links:
-                        logger.info(
-                            "eip_linked",
-                            eip=eip,
-                            implementations=len(links),
-                            top_function=links[0].function_name if links else None,
-                        )
+                # Concurrent EIP linking
+                await link_eips_concurrent(
+                    linker, codebase_files, eips_to_link, max_concurrent=MAX_EIP_CONCURRENT
+                )
 
             except Exception as e:
                 logger.warning("eip_linking_failed", error=str(e))
@@ -346,13 +451,49 @@ async def ingest_client(
     )
 
 
+async def ingest_all_clients(
+    data_dir: str = "data",
+    batch_size: int = 50,
+    link_eips: bool = True,
+    eip_numbers: list[int] | None = None,
+):
+    """Ingest all known client repositories in parallel."""
+    load_dotenv()
+
+    repos = ["lighthouse", "prysm", "reth"]  # go-ethereum already done
+    logger.info("ingesting_all_clients", repos=repos)
+
+    # Run all ingestions concurrently
+    tasks = [
+        ingest_client(
+            repo_name=repo,
+            data_dir=data_dir,
+            batch_size=batch_size,
+            link_eips=link_eips,
+            eip_numbers=eip_numbers,
+            # Reduce concurrency per repo when running multiple
+            parse_workers=4,
+            embed_concurrent=2,
+        )
+        for repo in repos
+    ]
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    for repo, result in zip(repos, results, strict=True):
+        if isinstance(result, Exception):
+            logger.error("client_ingestion_failed", repo=repo, error=str(result))
+        else:
+            logger.info("client_ingestion_succeeded", repo=repo)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Ingest Ethereum client codebase")
     parser.add_argument(
         "--repo",
         required=True,
-        choices=list(KNOWN_REPOS.keys()),
-        help="Client repository to ingest",
+        choices=[*KNOWN_REPOS.keys(), "all"],
+        help="Client repository to ingest, or 'all' for parallel ingestion",
     )
     parser.add_argument(
         "--data-dir",
@@ -382,6 +523,18 @@ def main():
         default=None,
         help="Comma-separated list of EIP numbers to link (default: common EIPs)",
     )
+    parser.add_argument(
+        "--parse-workers",
+        type=int,
+        default=MAX_PARSE_WORKERS,
+        help=f"Number of parallel workers for parsing (default: {MAX_PARSE_WORKERS})",
+    )
+    parser.add_argument(
+        "--embed-concurrent",
+        type=int,
+        default=MAX_EMBED_CONCURRENT,
+        help=f"Number of concurrent embedding batches (default: {MAX_EMBED_CONCURRENT})",
+    )
 
     args = parser.parse_args()
 
@@ -389,16 +542,28 @@ def main():
     if args.eips:
         eip_numbers = [int(e.strip()) for e in args.eips.split(",")]
 
-    asyncio.run(
-        ingest_client(
-            repo_name=args.repo,
-            data_dir=args.data_dir,
-            batch_size=args.batch_size,
-            limit=args.limit,
-            link_eips=not args.no_link_eips,
-            eip_numbers=eip_numbers,
+    if args.repo == "all":
+        asyncio.run(
+            ingest_all_clients(
+                data_dir=args.data_dir,
+                batch_size=args.batch_size,
+                link_eips=not args.no_link_eips,
+                eip_numbers=eip_numbers,
+            )
         )
-    )
+    else:
+        asyncio.run(
+            ingest_client(
+                repo_name=args.repo,
+                data_dir=args.data_dir,
+                batch_size=args.batch_size,
+                limit=args.limit,
+                link_eips=not args.no_link_eips,
+                eip_numbers=eip_numbers,
+                parse_workers=args.parse_workers,
+                embed_concurrent=args.embed_concurrent,
+            )
+        )
 
 
 if __name__ == "__main__":

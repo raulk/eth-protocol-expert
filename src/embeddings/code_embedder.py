@@ -22,13 +22,14 @@ class CodeEmbedding:
 
 
 class CodeEmbedder:
-    """Generate embeddings optimized for code using Voyage AI's code model."""
+    """Generate embeddings optimized for code using Voyage AI's voyage-code-3 model."""
 
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "voyage-code-2",
+        model: str = "voyage-code-3",
         batch_size: int = 128,
+        output_dimension: int = 1024,
     ):
         self.api_key = api_key or os.environ.get("VOYAGE_API_KEY")
         if not self.api_key:
@@ -36,8 +37,9 @@ class CodeEmbedder:
 
         self.model = model
         self.batch_size = batch_size
+        self.output_dimension = output_dimension
         self.client = voyageai.Client(api_key=self.api_key)
-        self.embedding_dim = 1536
+        self.embedding_dim = output_dimension  # voyage-code-3 supports 256/512/1024/2048
 
     def embed_chunks(self, chunks: list[CodeChunk]) -> list[CodeEmbedding]:
         """Generate embeddings for a list of code chunks."""
@@ -61,6 +63,7 @@ class CodeEmbedder:
                 texts=batch_texts,
                 model=self.model,
                 input_type="document",
+                output_dimension=self.output_dimension,
             )
 
             for chunk, embedding in zip(batch_chunks, result.embeddings, strict=True):
@@ -90,6 +93,7 @@ class CodeEmbedder:
             texts=[query],
             model=self.model,
             input_type="query",
+            output_dimension=self.output_dimension,
         )
         return result.embeddings[0]
 
@@ -100,6 +104,7 @@ class CodeEmbedder:
             texts=[text],
             model=self.model,
             input_type="document",
+            output_dimension=self.output_dimension,
         )
         return result.embeddings[0]
 

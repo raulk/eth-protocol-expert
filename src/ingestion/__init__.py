@@ -19,6 +19,12 @@ from .execution_apis_loader import (
 )
 from .execution_spec_loader import ExecutionSpec, ExecutionSpecLoader
 from .git_code_loader import CodeRepository, GitCodeLoader
+from .github_issues_loader import (
+    DEFAULT_REPOS as DEFAULT_GITHUB_REPOS,
+    GitHubComment,
+    GitHubIssueDocument,
+    GitHubIssuesLoader,
+)
 from .magicians_loader import MagiciansLoader
 from .markdown_spec_loader import MarkdownSpec, MarkdownSpecLoader
 from .orchestrator import (
@@ -63,6 +69,10 @@ __all__ = [
     "ExecutionSpecLoader",
     "ForumStatistics",
     "GitCodeLoader",
+    "GitHubComment",
+    "GitHubIssueDocument",
+    "GitHubIssuesLoader",
+    "DEFAULT_GITHUB_REPOS",
     "GitHubSyncer",
     "IngestionOrchestrator",
     "JSONRPCMethod",

@@ -47,6 +47,7 @@ ALL_SOURCES = [
     "research",
     "ethresearch",
     "magicians",
+    "github_issues",
 ]
 
 
@@ -238,6 +239,21 @@ async def sync_ethresearch(
     return {"source": source_name, "synced": result.get("synced", 0), "status": "success"}
 
 
+async def sync_github_issues(
+    orchestrator: IngestionOrchestrator, dry_run: bool = False
+) -> dict:
+    """Sync GitHub issues and PRs for configured repos."""
+    source_name = "github_issues"
+
+    if dry_run:
+        return {"source": source_name, "status": "dry_run"}
+
+    from scripts.ingest_github_issues import ingest_github_issues
+
+    total = await ingest_github_issues(state_path=str(orchestrator.state_path))
+    return {"source": source_name, "synced": total, "status": "success"}
+
+
 async def sync_all(
     orchestrator: IngestionOrchestrator,
     sources: list[str] | None = None,
@@ -255,6 +271,7 @@ async def sync_all(
         "execution_specs": sync_execution_specs,
         "research": sync_research,
         "ethresearch": sync_ethresearch,
+        "github_issues": sync_github_issues,
     }
 
     if sources is None:

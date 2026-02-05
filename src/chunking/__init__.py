@@ -4,6 +4,7 @@ from .fixed_chunker import Chunk, FixedChunker
 from .forum_chunker import ForumChunker
 from .paper_chunker import PaperChunk, PaperChunker
 from .section_chunker import SectionChunker
+from .text_chunker import TextChunker
 from .transcript_chunker import TranscriptChunk, TranscriptChunker
 
 __all__ = [
@@ -15,6 +16,7 @@ __all__ = [
     "PaperChunk",
     "PaperChunker",
     "SectionChunker",
+    "TextChunker",
     "TranscriptChunk",
     "TranscriptChunker",
     "convert_chunks",

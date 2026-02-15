@@ -460,7 +460,7 @@ async def ingest_all_clients(
     """Ingest all known client repositories in parallel."""
     load_dotenv()
 
-    repos = ["lighthouse", "prysm", "reth"]  # go-ethereum already done
+    repos = list(KNOWN_REPOS.keys())
     logger.info("ingesting_all_clients", repos=repos)
 
     # Run all ingestions concurrently
@@ -491,9 +491,9 @@ def main():
     parser = argparse.ArgumentParser(description="Ingest Ethereum client codebase")
     parser.add_argument(
         "--repo",
-        required=True,
+        default="all",
         choices=[*KNOWN_REPOS.keys(), "all"],
-        help="Client repository to ingest, or 'all' for parallel ingestion",
+        help="Client repository to ingest (default: all)",
     )
     parser.add_argument(
         "--data-dir",

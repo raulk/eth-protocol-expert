@@ -1,20 +1,15 @@
 #!/usr/bin/env python3
-"""Ingest ethresear.ch forum topics from cache into the database.
+"""Ingest ethresear.ch forum topics into the database.
 
-This script reads topics from the local cache and ingests them into the database.
-It does NOT fetch from the API - use sync_ethresearch.py to populate the cache first.
-
-Features:
-- Pipelined processing: chunking and embedding run concurrently
-- Batched embeddings: reduces API overhead
-- Skip existing: avoid re-ingesting already processed topics
+Syncs topics from the ethresear.ch API to a local cache, then ingests them.
+If the cache is already populated, only the ingest step runs (use --sync to
+force a fresh sync).
 
 Usage:
-    uv run python scripts/sync_ethresearch.py --max-topics 500  # First sync
-    uv run python scripts/ingest_ethresearch.py                  # Then ingest
-
-    uv run python scripts/ingest_ethresearch.py --skip-existing  # Skip already ingested
-    uv run python scripts/ingest_ethresearch.py --batch-size 256 # Larger embedding batches
+    uv run python scripts/ingest_ethresearch.py                  # sync if needed, then ingest
+    uv run python scripts/ingest_ethresearch.py --skip-existing  # skip already ingested
+    uv run python scripts/ingest_ethresearch.py --sync           # force sync before ingest
+    uv run python scripts/ingest_ethresearch.py --max-topics 500 # limit sync scope
 """
 
 import argparse
@@ -59,19 +54,17 @@ async def ingest_ethresearch(
     skip_existing: bool = False,
     batch_size: int = 128,
     queue_size: int = 10,
+    max_topics: int = 1000,
 ) -> None:
     """Ingest ethresear.ch topics with pipelined chunking and embedding."""
+    from scripts.sync_ethresearch import sync_ethresearch
+
     cache = RawContentCache()
     loader = EthresearchLoader(cache=cache)
 
-    # Check cache stats
+    logger.info("syncing_forum", max_topics=max_topics)
+    await sync_ethresearch(max_topics=max_topics)
     stats = cache.stats("ethresearch")
-    if stats["entry_count"] == 0:
-        logger.error(
-            "cache_empty",
-            message="No topics in cache. Run sync_ethresearch.py first.",
-        )
-        return
 
     logger.info(
         "starting_ingestion",
@@ -235,12 +228,18 @@ async def ingest_ethresearch(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Ingest ethresear.ch topics from cache into database"
+        description="Ingest ethresear.ch topics into database"
     )
     parser.add_argument(
         "--skip-existing",
         action="store_true",
         help="Skip topics that are already in the database",
+    )
+    parser.add_argument(
+        "--max-topics",
+        type=int,
+        default=1000,
+        help="Maximum topics to sync from API (default: 1000)",
     )
     parser.add_argument(
         "--batch-size",
@@ -261,6 +260,7 @@ def main() -> None:
             skip_existing=args.skip_existing,
             batch_size=args.batch_size,
             queue_size=args.queue_size,
+            max_topics=args.max_topics,
         )
     )
 

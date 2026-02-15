@@ -15,10 +15,6 @@ dependencies = [
     # LLM
     "anthropic>=0.40.0",
 
-    # NLI validation (Phase 2)
-    "transformers>=4.36.0",
-    "torch>=2.1.0",
-
     # Reranking (Phase 3)
     "cohere>=5.0.0",
 

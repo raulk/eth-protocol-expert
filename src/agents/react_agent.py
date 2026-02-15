@@ -19,6 +19,7 @@ from src.agents.budget_enforcer import AgentBudget, BudgetEnforcer
 from src.agents.query_analyzer import QueryAnalyzer
 from src.agents.reflection import Reflector
 from src.agents.retrieval_tool import RetrievalMode, RetrievalTool
+from src.config import DEFAULT_MODEL
 
 logger = structlog.get_logger()
 
@@ -167,7 +168,7 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
         retrieval_tool: RetrievalTool,
         budget: AgentBudget | None = None,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
         enable_reflection: bool = True,
         enable_backtracking: bool = True,
         enable_adaptive_budget: bool = True,

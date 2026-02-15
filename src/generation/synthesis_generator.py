@@ -10,6 +10,7 @@ from typing import ClassVar
 import anthropic
 import structlog
 
+from ..config import DEFAULT_MODEL
 from ..evidence.evidence_ledger import EvidenceLedger
 from ..evidence.evidence_span import EvidenceSpan
 from ..retrieval.budget_manager import BudgetManager
@@ -92,7 +93,7 @@ Structure your response to show both individual concepts and their connections."
         query_decomposer: QueryDecomposer,
         budget_manager: BudgetManager,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
         max_context_tokens: int = 8000,
     ):
         self.staged_retriever = staged_retriever

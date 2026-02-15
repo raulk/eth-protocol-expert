@@ -10,6 +10,8 @@ from enum import Enum
 import anthropic
 import structlog
 
+from src.config import DEFAULT_MODEL
+
 logger = structlog.get_logger()
 
 
@@ -55,7 +57,7 @@ class QueryDecomposer:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
     ):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:

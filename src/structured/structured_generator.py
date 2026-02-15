@@ -9,6 +9,7 @@ from typing import Any, ClassVar
 import anthropic
 import structlog
 
+from src.config import DEFAULT_MODEL
 from src.graph.dependency_traverser import DependencyTraverser
 from src.graph.falkordb_store import FalkorDBStore
 from src.retrieval.simple_retriever import RetrievalResult, SimpleRetriever
@@ -104,7 +105,7 @@ class StructuredGenerator:
         retriever: SimpleRetriever,
         graph_store: FalkorDBStore | None = None,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
     ):
         self.retriever = retriever
         self.graph_store = graph_store

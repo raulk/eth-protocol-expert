@@ -6,6 +6,7 @@ from typing import ClassVar
 
 import structlog
 
+from src.config import MODEL_BALANCED, MODEL_FAST, MODEL_POWERFUL
 from src.ensemble.confidence_scorer import RetrievalConfidence
 from src.routing.query_classifier import ClassificationResult, QueryType
 
@@ -267,7 +268,7 @@ class ConditionalTrigger:
         return EnsembleDecision(
             use_ensemble=True,
             reason=combined_reasons,
-            suggested_models=["claude-sonnet-4-20250514", "claude-opus-4-20250514"],
+            suggested_models=[MODEL_BALANCED, MODEL_POWERFUL],
             suggested_strategy="merge",
             priority=triggers[0][1],
         )
@@ -297,19 +298,9 @@ class ConditionalTrigger:
         max_priority = max(t[1] for t in triggers) if triggers else 0
 
         if max_priority >= 50 or high_stakes_score >= 0.75:
-            return [
-                "claude-3-haiku-20240307",
-                "claude-sonnet-4-20250514",
-                "claude-opus-4-20250514",
-            ]
+            return [MODEL_FAST, MODEL_BALANCED, MODEL_POWERFUL]
 
         if max_priority >= 35:
-            return [
-                "claude-sonnet-4-20250514",
-                "claude-opus-4-20250514",
-            ]
+            return [MODEL_BALANCED, MODEL_POWERFUL]
 
-        return [
-            "claude-3-haiku-20240307",
-            "claude-sonnet-4-20250514",
-        ]
+        return [MODEL_FAST, MODEL_BALANCED]

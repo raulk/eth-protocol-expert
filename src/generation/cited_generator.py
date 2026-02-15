@@ -9,6 +9,7 @@ from dataclasses import dataclass
 import anthropic
 import structlog
 
+from ..config import DEFAULT_MODEL
 from ..evidence.evidence_ledger import EvidenceLedger
 from ..evidence.evidence_span import EvidenceSpan
 from ..retrieval.simple_retriever import RetrievalResult, SimpleRetriever
@@ -39,7 +40,7 @@ class CitedGenerator:
         self,
         retriever: SimpleRetriever,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
         max_context_tokens: int = 8000,
     ):
         self.retriever = retriever

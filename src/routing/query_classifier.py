@@ -11,6 +11,8 @@ from typing import ClassVar
 import anthropic
 import structlog
 
+from ..config import DEFAULT_MODEL
+
 logger = structlog.get_logger()
 
 
@@ -87,7 +89,7 @@ class QueryClassifier:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
         use_llm: bool = True,
     ):
         """Initialize the query classifier.

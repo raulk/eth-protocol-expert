@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 import anthropic
 import structlog
 
+from src.config import DEFAULT_MODEL
 from src.ensemble.multi_model_runner import ModelRun
 
 logger = structlog.get_logger()
@@ -37,7 +38,7 @@ class SynthesisCombiner:
     def __init__(
         self,
         api_key: str | None = None,
-        synthesis_model: str = "claude-sonnet-4-20250514",
+        synthesis_model: str = DEFAULT_MODEL,
     ):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         self.synthesis_model = synthesis_model

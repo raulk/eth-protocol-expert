@@ -9,6 +9,7 @@ from typing import ClassVar
 import anthropic
 import structlog
 
+from ..config import DEFAULT_MODEL
 from .nli_validator import AtomicFact
 
 logger = structlog.get_logger()
@@ -30,7 +31,7 @@ class ClaimDecomposer:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
     ):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:

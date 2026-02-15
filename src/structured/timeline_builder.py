@@ -10,6 +10,7 @@ from typing import Any, ClassVar
 import anthropic
 import structlog
 
+from src.config import DEFAULT_MODEL
 from src.retrieval.simple_retriever import RetrievalResult
 from src.storage.pg_vector_store import SearchResult
 
@@ -71,7 +72,7 @@ class TimelineBuilder:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
     ):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if not self.api_key:

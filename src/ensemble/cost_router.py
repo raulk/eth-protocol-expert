@@ -7,6 +7,7 @@ from typing import ClassVar
 
 import structlog
 
+from src.config import MODEL_BALANCED, MODEL_FAST, MODEL_POWERFUL
 from src.routing.query_classifier import ClassificationResult, QueryClassifier, QueryType
 
 logger = structlog.get_logger()
@@ -53,25 +54,25 @@ class CostRouter:
 
     MODEL_CONFIGS: ClassVar[dict[ModelTier, ModelConfig]] = {
         ModelTier.FAST: ModelConfig(
-            model_id="claude-3-haiku-20240307",
+            model_id=MODEL_FAST,
             tier=ModelTier.FAST,
-            input_cost_per_1k=0.00025,
-            output_cost_per_1k=0.00125,
-            max_output_tokens=4096,
+            input_cost_per_1k=0.0008,
+            output_cost_per_1k=0.004,
+            max_output_tokens=8192,
         ),
         ModelTier.BALANCED: ModelConfig(
-            model_id="claude-sonnet-4-20250514",
+            model_id=MODEL_BALANCED,
             tier=ModelTier.BALANCED,
             input_cost_per_1k=0.003,
             output_cost_per_1k=0.015,
-            max_output_tokens=8192,
+            max_output_tokens=16384,
         ),
         ModelTier.POWERFUL: ModelConfig(
-            model_id="claude-opus-4-20250514",
+            model_id=MODEL_POWERFUL,
             tier=ModelTier.POWERFUL,
             input_cost_per_1k=0.015,
             output_cost_per_1k=0.075,
-            max_output_tokens=8192,
+            max_output_tokens=16384,
         ),
     }
 

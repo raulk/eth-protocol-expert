@@ -9,6 +9,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from ..agents import AgentBudget, ReactAgent, RetrievalTool
+from ..config import DEFAULT_MODEL
 from ..embeddings.voyage_embedder import VoyageEmbedder
 from ..generation.cited_generator import CitedGenerator
 from ..generation.simple_generator import SimpleGenerator
@@ -407,7 +408,7 @@ async def query(request: QueryRequest):
                 response=result.answer,
                 sources=sources,
                 mode="agentic",
-                model="claude-sonnet-4-20250514",
+                model=DEFAULT_MODEL,
                 input_tokens=result.total_tokens_retrieved,
                 output_tokens=0,
                 llm_calls=result.llm_calls,

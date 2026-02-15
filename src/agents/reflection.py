@@ -7,6 +7,8 @@ from dataclasses import dataclass
 import anthropic
 import structlog
 
+from ..config import DEFAULT_MODEL
+
 logger = structlog.get_logger()
 
 
@@ -66,7 +68,7 @@ Only respond with the JSON object, no other text."""
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = DEFAULT_MODEL,
         confidence_threshold: float = 0.7,
     ):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")

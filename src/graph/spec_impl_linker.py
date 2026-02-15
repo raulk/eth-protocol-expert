@@ -9,6 +9,7 @@ from typing import ClassVar
 import anthropic
 import structlog
 
+from src.config import DEFAULT_MODEL
 from src.graph.falkordb_store import FalkorDBStore
 
 logger = structlog.get_logger()
@@ -176,7 +177,7 @@ Focus on core implementation logic, not just references or imports."""
         try:
             response = await asyncio.to_thread(
                 self.client.messages.create,
-                model="claude-sonnet-4-20250514",
+                model=DEFAULT_MODEL,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}],
             )

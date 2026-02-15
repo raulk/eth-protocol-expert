@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import Markdown from 'react-markdown'
 
@@ -22,18 +22,15 @@ interface QueryResponse {
   model: string
   input_tokens: number
   output_tokens: number
-  // Validated mode fields
   total_claims?: number
   supported_claims?: number
   support_ratio?: number
   is_trustworthy?: boolean
   validation_report?: string
-  // Agentic mode fields
   llm_calls?: number
   retrieval_count?: number
   reasoning_chain?: string[]
   termination_reason?: string
-  // Graph mode fields
   related_eips?: number[]
   dependency_chain?: number[]
 }
@@ -62,13 +59,14 @@ const EXAMPLE_QUERIES = [
 
 function App() {
   const [query, setQuery] = useState('')
-  const [mode, setMode] = useState<QueryMode>('cited')
+  const [mode, setMode] = useState<QueryMode>('agentic')
   const [topK, setTopK] = useState(10)
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<QueryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set())
+  const [glowActive, setGlowActive] = useState(true)
 
   const checkHealth = useCallback(async () => {
     try {
@@ -164,23 +162,26 @@ function App() {
       <main className="main-content">
         <section className="query-section">
           <form className="query-form" onSubmit={handleSubmit}>
-            <div className="query-input-wrapper">
-              <input
-                type="text"
-                className="query-input"
-                placeholder="Ask a question about Ethereum protocol..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                disabled={isLoading}
-                aria-label="Search query"
-              />
-              <button
-                type="submit"
-                className={`query-submit ${isLoading ? 'loading' : ''}`}
-                disabled={isLoading || !query.trim()}
-              >
-                {isLoading ? 'Searching...' : 'Search'}
-              </button>
+            <div className={`search-glow ${glowActive ? 'intro' : ''}`}>
+              <div className="query-input-wrapper">
+                <input
+                  type="text"
+                  className="query-input"
+                  placeholder="Ask a question about Ethereum protocol..."
+                  value={query}
+                  onChange={(e) => { setQuery(e.target.value); setGlowActive(false) }}
+                  onFocus={() => setGlowActive(false)}
+                  disabled={isLoading}
+                  aria-label="Search query"
+                />
+                <button
+                  type="submit"
+                  className={`query-submit ${isLoading ? 'loading' : ''}`}
+                  disabled={isLoading || !query.trim()}
+                >
+                  {isLoading ? 'Searching...' : 'Search'}
+                </button>
+              </div>
             </div>
 
             <div className="query-options">
@@ -229,6 +230,12 @@ function App() {
               exit={{ opacity: 0 }}
               className="empty-state"
             >
+              <svg className="eth-diamond" viewBox="0 0 256 417" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden="true">
+                <path d="M127.961 0L127.962 154.158V287.958L255.923 212.32z" />
+                <path d="M127.962 0L0 212.32L127.962 287.959V154.158z" />
+                <path d="M127.961 312.187L127.962 416.905L255.999 236.587z" />
+                <path d="M127.962 416.905V312.185L0 236.585z" />
+              </svg>
               <div className="empty-state-icon">
                 <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true">
                   <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
@@ -352,6 +359,14 @@ function App() {
                         </span>
                       </div>
                     </div>
+                    {result.support_ratio !== undefined && (
+                      <div className="trust-meter">
+                        <div
+                          className="trust-fill"
+                          style={{ width: `${result.support_ratio * 100}%` }}
+                        />
+                      </div>
+                    )}
                     {result.validation_report && (
                       <pre className="validation-report">{result.validation_report}</pre>
                     )}
@@ -392,7 +407,7 @@ function App() {
                     <div className="validation-header">
                       <span className="validation-title">EIP Graph Context</span>
                       <span className="trust-badge trustworthy">
-                        {(result.related_eips?.length || 0) + (result.dependency_chain?.length || 0)} related
+                        {(result.related_eips?.length ?? 0) + (result.dependency_chain?.length ?? 0)} related
                       </span>
                     </div>
                     {result.related_eips && result.related_eips.length > 0 && (
@@ -419,7 +434,7 @@ function App() {
                         <div className="dependency-chain">
                           {result.dependency_chain.map((eip, i) => (
                             <span key={eip} className="chain-item">
-                              {i > 0 && <span className="chain-arrow">→</span>}
+                              {i > 0 && <span className="chain-arrow">&rarr;</span>}
                               <a
                                 href={`https://eips.ethereum.org/EIPS/eip-${eip}`}
                                 target="_blank"
@@ -452,6 +467,7 @@ function App() {
                     <div
                       key={index}
                       className={`source-item ${expandedSources.has(index) ? 'expanded' : ''}`}
+                      style={{ '--relevance': source.similarity } as CSSProperties}
                       onClick={() => toggleSourceExpanded(index)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {

@@ -220,8 +220,8 @@ For better quality, use `microsoft/deberta-v3-large-mnli` (requires HF login).
 | Raw content cache | `src/ingestion/cache.py` |
 | Database schema | `src/storage/pg_vector_store.py` |
 | API server | `src/api/main.py` |
-| Implementation plan | `IMPLEMENTATION_PLAN.md` |
-| Full spec | `SPEC.md` |
+| Implementation plan | `archive/plans-and-roadmaps` branch |
+| Full spec | `archive/plans-and-roadmaps` branch |
 
 ## Phase summary
 

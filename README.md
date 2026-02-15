@@ -30,6 +30,29 @@ An agentic RAG system for Ethereum protocol knowledge. Ingests 20+ data sources 
 | Research | arXiv papers, Vitalik's research, All Core Devs transcripts |
 | Code | go-ethereum, prysm, lighthouse, reth |
 
+## Ingestion pipeline
+
+Every source follows the same pattern: load raw content, chunk it into pieces sized for embedding, send chunks to Voyage AI to get vectors, then store the vectors in PostgreSQL (pgvector). Voyage is stateless; it returns vectors and retains nothing. At query time, the user's question is embedded (one Voyage call) and matched against stored vectors locally.
+
+The chunker and embedding model vary by content type:
+
+| Source | Chunker | Embedding model | Preprocessing |
+|--------|---------|-----------------|---------------|
+| EIPs, ERCs, RIPs | SectionChunker | voyage-4-large | Git clone, markdown parsing, frontmatter extraction |
+| Consensus specs | Custom markdown splitter | voyage-4-large | Regex section splitting, preserves code blocks atomically |
+| Execution specs | Custom Python splitter | voyage-4-large | Token-aware fixed chunking with overlap (512 tokens, 64 overlap) |
+| Execution APIs | SectionChunker | voyage-4-large | Markdown section extraction from ethereum/execution-apis |
+| Beacon APIs | SectionChunker | voyage-4-large | OpenAPI endpoint definitions converted to markdown |
+| Builder specs, DevP2P, Portal specs | SectionChunker | voyage-4-large | Markdown section extraction from respective repos |
+| ethresear.ch | ForumChunker | voyage-4-large | Discourse API sync to local cache (incremental), pipelined chunking+embedding |
+| Ethereum Magicians | ForumChunker | voyage-4-large | Live Discourse API queries, speaker-aware post chunking |
+| arXiv papers | PaperChunker | voyage-4-large | PDF extraction (PyMuPDF), quality scoring (rejects < 0.5), section-aware splits preserving equations |
+| Vitalik's research | SectionChunker | voyage-4-large | Markdown and Python content, split by file type |
+| ACD transcripts | TranscriptChunker | voyage-4-large | Speaker-aware chunking from ethereum/pm repo |
+| Client codebases | CodeChunker | voyage-code-3 | Tree-sitter parsing (Go/Rust), function-level extraction, structured text prep (file path, function name, dependencies) |
+
+All text sources target 512 tokens per chunk. Batches sent to Voyage are capped at 100K tokens (below the 120K API limit) to avoid rejected requests.
+
 ## Quick start
 
 ```bash
@@ -37,22 +60,28 @@ An agentic RAG system for Ethereum protocol knowledge. Ingests 20+ data sources 
 uv sync
 
 # Start infrastructure (PostgreSQL + pgvector, FalkorDB)
-docker compose up -d
+just up
 
 # Configure credentials
 cp .env.example .env  # then edit with your keys
 
-# Ingest EIPs
-uv run python scripts/ingest_eips.py
+# List available ingestion sources
+just ingestions
+
+# Ingest a specific source
+just ingest eips
 
 # Ingest everything
-uv run python scripts/ingest_all.py
+just ingest all
+
+# Sync ethresear.ch forum (incremental)
+uv run python scripts/sync_ethresearch.py
 
 # Query
-uv run python scripts/query_cli.py "What is EIP-1559?" --mode simple
-uv run python scripts/query_cli.py "How do blob transactions work?" --mode cited
-uv run python scripts/query_cli.py "Is the base fee claim accurate?" --mode validated
-uv run python scripts/query_cli.py "How does EIP-1559 interact with EIP-4844?" --mode agentic
+just query "What is EIP-1559?" simple
+just query "How do blob transactions work?" cited
+just query "Is the base fee claim accurate?" validated
+just query "How does EIP-1559 interact with EIP-4844?" agentic
 ```
 
 ## Query modes
@@ -71,7 +100,7 @@ uv run python scripts/query_cli.py "How does EIP-1559 interact with EIP-4844?" -
 src/
 ├── ingestion/       # 25 loaders for all data sources
 ├── chunking/        # Fixed, section, forum, paper, code, transcript chunkers
-├── embeddings/      # Voyage AI (voyage-4-large), code embeddings (voyage-code-2)
+├── embeddings/      # Voyage AI (voyage-4-large), code embeddings (voyage-code-3)
 ├── storage/         # PostgreSQL + pgvector
 ├── retrieval/       # Vector, BM25, hybrid, graph-augmented, reranked, staged
 ├── generation/      # Simple, cited, validated, synthesis generators
@@ -94,7 +123,7 @@ app/                 # React + TypeScript frontend
 ## API
 
 ```bash
-uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
+just api
 ```
 
 | Endpoint | Method | Description |
@@ -123,10 +152,10 @@ uvicorn src.api.main:app --reload --host 127.0.0.1 --port 8000
 ## Development
 
 ```bash
-uv run pytest tests/ -v          # unit tests
-uv run python scripts/test_e2e.py # end-to-end test
-uv run ruff check . --fix         # lint
-uv run ruff format .              # format
+just test             # unit tests
+just test-e2e         # end-to-end test
+just lint             # lint + format
+just check            # check without fixing
 ```
 
 ## License

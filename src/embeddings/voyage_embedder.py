@@ -37,22 +37,50 @@ class VoyageEmbedder:
         self.client = voyageai.Client(api_key=self.api_key)
         self.embedding_dim = 1024  # voyage-4-large default dimension
 
+    def _make_token_batches(self, chunks: list[Chunk]) -> list[list[int]]:
+        """Split chunks into batches that fit within Voyage's token limit.
+
+        Uses a rough 4 chars/token estimate. Voyage's limit is 120K tokens
+        per batch; we target 100K to leave headroom.
+        """
+        max_tokens = 100_000
+        chars_per_token = 4
+        batches: list[list[int]] = []
+        current_batch: list[int] = []
+        current_tokens = 0
+
+        for i, chunk in enumerate(chunks):
+            est_tokens = len(chunk.content) // chars_per_token + 1
+            if current_batch and (
+                current_tokens + est_tokens > max_tokens
+                or len(current_batch) >= self.batch_size
+            ):
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+            current_batch.append(i)
+            current_tokens += est_tokens
+
+        if current_batch:
+            batches.append(current_batch)
+        return batches
+
     def embed_chunks(self, chunks: list[Chunk]) -> list[EmbeddedChunk]:
         """Embed a list of chunks."""
         if not chunks:
             return []
 
-        # Process in batches
         all_embedded = []
-        texts = [chunk.content for chunk in chunks]
+        batches = self._make_token_batches(chunks)
 
-        for i in range(0, len(texts), self.batch_size):
-            batch_texts = texts[i:i + self.batch_size]
-            batch_chunks = chunks[i:i + self.batch_size]
+        for batch_num, indices in enumerate(batches, 1):
+            batch_texts = [chunks[i].content for i in indices]
+            batch_chunks = [chunks[i] for i in indices]
 
             logger.debug(
                 "embedding_batch",
-                batch_num=i // self.batch_size + 1,
+                batch_num=batch_num,
+                total_batches=len(batches),
                 batch_size=len(batch_texts),
             )
 

@@ -216,11 +216,12 @@ async def sync_ethresearch(
     if dry_run:
         return {"source": source_name, "status": "dry_run"}
 
-    from scripts.sync_ethresearch import sync_topics
+    from scripts.sync_ethresearch import sync
 
-    state = orchestrator.get_source_state(source_name)
+    from src.ingestion import EthresearchLoader, RawContentCache
 
-    result = await sync_topics(max_topics=500, incremental=True)
+    loader = EthresearchLoader(cache=RawContentCache())
+    result = await sync(loader)
 
     if result.get("synced", 0) == 0:
         logger.info("already_up_to_date", source=source_name)

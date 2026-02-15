@@ -359,8 +359,18 @@ class EthresearchLoader:
             logger.warning("topic_not_found", topic_id=topic_id)
             return False
 
-        # Cache it
+        # Use the listing endpoint's bumped_at if it's newer than the individual
+        # topic endpoint's. The two endpoints can diverge by minutes, causing
+        # the staleness check (which compares against the listing) to perpetually
+        # consider the cache stale.
         topic_dict = self._topic_to_cache_dict(topic)
+        if api_metadata and api_metadata.bumped_at:
+            cached_bumped = topic_dict.get("bumped_at")
+            if cached_bumped:
+                fetched_dt = datetime.fromisoformat(cached_bumped)
+                if api_metadata.bumped_at > fetched_dt:
+                    topic_dict["bumped_at"] = api_metadata.bumped_at.isoformat()
+
         self.cache.put(
             source=self.source,
             item_id=item_id,

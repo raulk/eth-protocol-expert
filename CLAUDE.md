@@ -8,7 +8,7 @@ Agentic RAG system for Ethereum protocol knowledge with citation validation, kno
 docker compose up -d                                          # start infrastructure
 uv run python scripts/ingest_eips.py                          # ingest EIPs
 uv run python scripts/ingest_all.py                           # ingest all sources
-uv run python scripts/sync_ethresearch.py --max-topics 1000   # sync forum to cache
+uv run python scripts/sync_ethresearch.py                      # sync forum to cache (incremental)
 uv run python scripts/ingest_ethresearch.py --skip-existing   # ingest forum from cache
 uv run python scripts/query_cli.py "question" --mode agentic  # query (simple|cited|validated|agentic|graph)
 uv run pytest tests/ -v                                       # tests
@@ -21,7 +21,7 @@ uv run ruff check . --fix && uv run ruff format .             # lint + format
 src/
 ├── ingestion/      # 25 loaders: EIPs, ERCs, RIPs, specs, forums, papers, client code
 ├── chunking/       # Fixed, section, forum, paper, code, transcript chunkers
-├── embeddings/     # Voyage AI (voyage-4-large, 1024-dim), code (voyage-code-2, 1536-dim)
+├── embeddings/     # Voyage AI (voyage-4-large, 1024-dim), code (voyage-code-3, 1024-dim)
 ├── storage/        # PostgreSQL + pgvector
 ├── retrieval/      # Vector, BM25, hybrid (RRF), graph-augmented, reranked, staged
 ├── generation/     # Simple, cited, validated, synthesis generators (Claude)

@@ -16,6 +16,15 @@ up:
 down:
     docker compose down
 
+# Build (or rebuild) container images
+build:
+    docker compose build
+
+# Rebuild images and restart services
+refresh:
+    docker compose build
+    docker compose up -d
+
 # Reset database (deletes all data)
 reset:
     docker compose down -v
@@ -40,6 +49,10 @@ query question mode="agentic":
 # Ingest all sources (or a specific one: just ingest eips, just ingest consensus-specs, etc.)
 ingest source="all":
     uv run python scripts/ingest_{{ replace(source, "-", "_") }}.py
+
+# List available ingestion sources
+ingestions:
+    @ls scripts/ingest_*.py | sed 's|scripts/ingest_||;s|\.py||;s|_|-|g' | sort
 
 # --- API ---
 

@@ -41,6 +41,33 @@ class CodeEmbedder:
         self.client = voyageai.Client(api_key=self.api_key)
         self.embedding_dim = output_dimension  # voyage-code-3 supports 256/512/1024/2048
 
+    def _make_token_batches(self, texts: list[str]) -> list[list[int]]:
+        """Split texts into batches that fit within Voyage's 120K token limit.
+
+        Uses a rough 4 chars/token estimate, targeting 100K to leave headroom.
+        """
+        max_tokens = 100_000
+        chars_per_token = 4
+        batches: list[list[int]] = []
+        current_batch: list[int] = []
+        current_tokens = 0
+
+        for i, text in enumerate(texts):
+            est_tokens = len(text) // chars_per_token + 1
+            if current_batch and (
+                current_tokens + est_tokens > max_tokens
+                or len(current_batch) >= self.batch_size
+            ):
+                batches.append(current_batch)
+                current_batch = []
+                current_tokens = 0
+            current_batch.append(i)
+            current_tokens += est_tokens
+
+        if current_batch:
+            batches.append(current_batch)
+        return batches
+
     def embed_chunks(self, chunks: list[CodeChunk]) -> list[CodeEmbedding]:
         """Generate embeddings for a list of code chunks."""
         if not chunks:
@@ -48,14 +75,16 @@ class CodeEmbedder:
 
         all_embeddings: list[CodeEmbedding] = []
         texts = [self._prepare_code_text(chunk) for chunk in chunks]
+        batches = self._make_token_batches(texts)
 
-        for i in range(0, len(texts), self.batch_size):
-            batch_texts = texts[i : i + self.batch_size]
-            batch_chunks = chunks[i : i + self.batch_size]
+        for batch_num, indices in enumerate(batches, 1):
+            batch_texts = [texts[i] for i in indices]
+            batch_chunks = [chunks[i] for i in indices]
 
             logger.debug(
                 "embedding_code_batch",
-                batch_num=i // self.batch_size + 1,
+                batch_num=batch_num,
+                total_batches=len(batches),
                 batch_size=len(batch_texts),
             )
 
@@ -77,7 +106,7 @@ class CodeEmbedder:
                     )
                 )
 
-        logger.info("embedded_code_chunks", count=len(all_embeddings))
+        logger.debug("embedded_code_chunks", count=len(all_embeddings))
         return all_embeddings
 
     def embed_query(

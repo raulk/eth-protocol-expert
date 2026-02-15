@@ -54,16 +54,15 @@ async def ingest_ethresearch(
     skip_existing: bool = False,
     batch_size: int = 128,
     queue_size: int = 10,
-    max_topics: int = 1000,
 ) -> None:
     """Ingest ethresear.ch topics with pipelined chunking and embedding."""
-    from scripts.sync_ethresearch import sync_ethresearch
+    from scripts.sync_ethresearch import sync
 
     cache = RawContentCache()
     loader = EthresearchLoader(cache=cache)
 
-    logger.info("syncing_forum", max_topics=max_topics)
-    await sync_ethresearch(max_topics=max_topics)
+    logger.info("syncing_forum")
+    await sync(loader)
     stats = cache.stats("ethresearch")
 
     logger.info(
@@ -236,12 +235,6 @@ def main() -> None:
         help="Skip topics that are already in the database",
     )
     parser.add_argument(
-        "--max-topics",
-        type=int,
-        default=1000,
-        help="Maximum topics to sync from API (default: 1000)",
-    )
-    parser.add_argument(
         "--batch-size",
         type=int,
         default=128,
@@ -260,7 +253,6 @@ def main() -> None:
             skip_existing=args.skip_existing,
             batch_size=args.batch_size,
             queue_size=args.queue_size,
-            max_topics=args.max_topics,
         )
     )
 

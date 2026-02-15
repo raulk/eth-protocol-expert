@@ -30,7 +30,9 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking import Chunk
-from src.embeddings.voyage_embedder import EmbeddedChunk, VoyageEmbedder
+from src.chunking.code_chunker import CodeChunk, CodeChunker
+from src.embeddings.code_embedder import CodeEmbedder
+from src.embeddings.voyage_embedder import EmbeddedChunk
 from src.graph import FalkorDBStore, SpecImplLinker
 from src.parsing import CodeUnit, CodeUnitExtractor, TreeSitterParser
 from src.storage.pg_vector_store import PgVectorStore
@@ -198,32 +200,30 @@ def parse_files_concurrent(
 
 
 async def embed_batch_async(
-    embedder: VoyageEmbedder,
-    chunks: list[Chunk],
+    embedder: CodeEmbedder,
+    chunks: list[CodeChunk],
     semaphore: asyncio.Semaphore,
-) -> list[EmbeddedChunk]:
-    """Embed a batch of chunks with semaphore-limited concurrency."""
+) -> list:
+    """Embed a batch of code chunks with semaphore-limited concurrency."""
     async with semaphore:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(None, embedder.embed_chunks, chunks)
 
 
 async def embed_chunks_concurrent(
-    embedder: VoyageEmbedder,
-    all_chunks: list[Chunk],
+    embedder: CodeEmbedder,
+    all_chunks: list[CodeChunk],
     batch_size: int = 64,
     max_concurrent: int = MAX_EMBED_CONCURRENT,
-) -> list[EmbeddedChunk]:
-    """Embed chunks with concurrent API calls."""
+) -> list:
+    """Embed code chunks with concurrent API calls."""
     semaphore = asyncio.Semaphore(max_concurrent)
-    all_embedded: list[EmbeddedChunk] = []
+    all_embedded = []
 
-    # Split into batches
     batches = [all_chunks[i : i + batch_size] for i in range(0, len(all_chunks), batch_size)]
 
     logger.info("embedding_concurrent", total_chunks=len(all_chunks), batches=len(batches))
 
-    # Process batches concurrently
     tasks = [embed_batch_async(embedder, batch, semaphore) for batch in batches]
 
     completed = 0
@@ -231,13 +231,12 @@ async def embed_chunks_concurrent(
         result = await coro
         all_embedded.extend(result)
         completed += 1
-        if completed % 10 == 0 or completed == len(batches):
-            logger.info(
-                "embedding_progress",
-                batches_done=completed,
-                total_batches=len(batches),
-                chunks_embedded=len(all_embedded),
-            )
+        logger.info(
+            "embedding_progress",
+            batches_done=completed,
+            total_batches=len(batches),
+            chunks_embedded=len(all_embedded),
+        )
 
     return all_embedded
 
@@ -277,28 +276,19 @@ async def link_eips_concurrent(
             )
 
 
-def code_unit_to_chunk(
-    unit: CodeUnit,
-    repo_name: str,
-    language: str,
-    git_commit: str,
-) -> Chunk:
-    """Convert a CodeUnit to a Chunk for storage."""
-    relative_path = unit.file_path
-    if repo_name in relative_path:
-        relative_path = relative_path.split(repo_name + "/", 1)[-1]
-
-    chunk_id = f"code:{repo_name}:{relative_path}:{unit.name}:{unit.line_range[0]}"
-
-    return Chunk(
-        chunk_id=chunk_id,
-        document_id=f"code:{repo_name}",
-        content=unit.content,
-        token_count=len(unit.content.split()),
-        chunk_index=unit.line_range[0],
-        section_path=relative_path,
-        start_offset=unit.line_range[0],
-        end_offset=unit.line_range[1],
+def to_embedded_chunk(code_chunk: CodeChunk, embedding: list[float], repo_name: str, model: str) -> EmbeddedChunk:
+    """Bridge CodeEmbedder output back to EmbeddedChunk for storage."""
+    return EmbeddedChunk(
+        chunk=Chunk(
+            chunk_id=code_chunk.chunk_id,
+            document_id=f"code:{repo_name}",
+            content=code_chunk.content,
+            token_count=code_chunk.token_count,
+            chunk_index=0,
+            section_path=code_chunk.file_path,
+        ),
+        embedding=embedding,
+        model=model,
     )
 
 
@@ -355,12 +345,12 @@ async def ingest_client(
         total_units=len(all_units),
     )
 
-    logger.info("converting_to_chunks")
-    all_chunks = [
-        code_unit_to_chunk(unit, repo_name, repo.language, git_commit) for unit in all_units
-    ]
+    chunker = CodeChunker()
+    logger.info("chunking_code_units")
+    code_chunks = chunker.chunk(all_units, language=repo.language)
+    logger.info("chunking_complete", code_chunks=len(code_chunks))
 
-    embedder = VoyageEmbedder()
+    embedder = CodeEmbedder()
     store = PgVectorStore()
 
     await store.connect()
@@ -381,15 +371,20 @@ async def ingest_client(
             git_commit=git_commit,
         )
 
-        # Concurrent embedding
         logger.info(
             "embedding_code_units_concurrent",
-            total=len(all_chunks),
+            total=len(code_chunks),
             concurrent_batches=embed_concurrent,
         )
-        all_embedded = await embed_chunks_concurrent(
-            embedder, all_chunks, batch_size=64, max_concurrent=embed_concurrent
+        code_embeddings = await embed_chunks_concurrent(
+            embedder, code_chunks, batch_size=64, max_concurrent=embed_concurrent
         )
+
+        # Bridge CodeEmbedding → EmbeddedChunk for storage
+        all_embedded = [
+            to_embedded_chunk(cc, ce.embedding, repo_name, embedder.model)
+            for cc, ce in zip(code_chunks, code_embeddings, strict=True)
+        ]
 
         # Store in batches
         store_batch_size = batch_size * 4
@@ -403,7 +398,7 @@ async def ingest_client(
             "ingestion_complete",
             repository=repo_name,
             code_units=len(all_units),
-            chunks_stored=len(all_chunks),
+            chunks_stored=len(code_chunks),
             total_chunks_in_db=final_chunks,
         )
 

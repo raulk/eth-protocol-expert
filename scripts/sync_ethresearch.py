@@ -4,18 +4,15 @@
 This script downloads topics from ethresear.ch API and stores them in the local
 cache. It does NOT ingest into the database - use ingest_ethresearch.py for that.
 
-Features:
-- Smart staleness detection: only re-fetches topics with new posts/activity
-- Parallel fetching with rate limiting (configurable concurrency)
-- Incremental sync: only fetch topics modified since last sync
-- Statistics display: shows total topics on forum vs cached
+Always uses incremental sync: on first run it fetches everything, on subsequent
+runs it only walks back through the listing until it reaches topics older than
+the last sync.
 
 Usage:
-    uv run python scripts/sync_ethresearch.py [--max-topics 1000]
+    uv run python scripts/sync_ethresearch.py
     uv run python scripts/sync_ethresearch.py --stats-only
-    uv run python scripts/sync_ethresearch.py --incremental
-    uv run python scripts/sync_ethresearch.py --max-topics 500 --force
-    uv run python scripts/sync_ethresearch.py --max-topics 500 --max-concurrent 10
+    uv run python scripts/sync_ethresearch.py --force
+    uv run python scripts/sync_ethresearch.py --max-concurrent 10
 """
 
 import argparse
@@ -82,14 +79,16 @@ async def show_statistics(cache: RawContentCache) -> dict:
     }
 
 
-async def sync_incremental(
+async def sync(
     loader: EthresearchLoader,
+    force: bool = False,
     max_concurrent: int = 5,
 ) -> dict[str, int]:
-    """Sync only topics modified since last sync.
+    """Incremental sync with backfill for missing topics.
 
-    Uses the bumped_at field to efficiently find topics that have been
-    updated since the last sync, stopping early when reaching old topics.
+    1. Walk recent activity back to the last sync timestamp (fast).
+    2. Compare forum topic count with cache count; if topics are missing,
+       enumerate all pages to find and fetch uncached ones.
     """
     sync_state = load_sync_state()
     last_sync = sync_state.get("last_sync_at")
@@ -98,8 +97,7 @@ async def sync_incremental(
         since = datetime.fromisoformat(last_sync)
         logger.info("incremental_sync_start", since=last_sync)
     else:
-        # First sync - fall back to full sync
-        logger.info("no_previous_sync_found", msg="performing full sync")
+        logger.info("first_sync", msg="no previous state, fetching all topics")
         since = None
 
     semaphore = asyncio.Semaphore(max_concurrent)
@@ -107,11 +105,11 @@ async def sync_incremental(
     results_lock = asyncio.Lock()
     sync_start = datetime.utcnow()
 
-    async def sync_with_semaphore(topic) -> None:
+    async def sync_one(topic) -> None:
         async with semaphore:
             await asyncio.sleep(loader.rate_limit_delay)
             try:
-                if not loader._is_topic_stale(
+                if not force and not loader._is_topic_stale(
                     topic.topic_id,
                     topic.bumped_at,
                     topic.posts_count,
@@ -123,7 +121,7 @@ async def sync_incremental(
                 success = await loader.sync_topic(
                     topic.topic_id,
                     api_metadata=topic,
-                    force=False,
+                    force=force,
                 )
                 async with results_lock:
                     if success:
@@ -135,33 +133,48 @@ async def sync_incremental(
                 async with results_lock:
                     results["failed"] += 1
 
-    # Collect topics that need syncing
+    # Phase 1: incremental sync of recently-bumped topics
     topics_to_sync = []
     async with DiscourseClient(ETHRESEARCH_BASE_URL) as client:
         if since:
-            # Incremental: only topics modified since last sync
             async for topic in client.iter_topics_since(since):
                 topics_to_sync.append(topic)
                 if len(topics_to_sync) % 100 == 0:
-                    logger.debug("collecting_topics", count=len(topics_to_sync))
+                    logger.debug("collecting_recent", count=len(topics_to_sync))
         else:
-            # Full sync: all topics
             async for topic in client.iter_all_topics():
                 topics_to_sync.append(topic)
                 if len(topics_to_sync) % 100 == 0:
-                    logger.debug("collecting_topics", count=len(topics_to_sync))
+                    logger.debug("collecting_all", count=len(topics_to_sync))
 
     logger.info(
-        "topics_to_check",
+        "incremental_topics",
         count=len(topics_to_sync),
         incremental=since is not None,
     )
 
-    # Sync topics in parallel
-    tasks = [sync_with_semaphore(topic) for topic in topics_to_sync]
+    tasks = [sync_one(topic) for topic in topics_to_sync]
     await asyncio.gather(*tasks)
 
-    # Save sync state
+    # Phase 2: backfill any topics the cache has never seen
+    if since:
+        cached_ids = set(loader.get_cached_topic_ids())
+        backfill_topics = []
+
+        async with DiscourseClient(ETHRESEARCH_BASE_URL) as client:
+            async for topic in client.iter_all_topics():
+                if topic.topic_id not in cached_ids:
+                    backfill_topics.append(topic)
+                    if len(backfill_topics) % 100 == 0:
+                        logger.debug("collecting_backfill", count=len(backfill_topics))
+
+        if backfill_topics:
+            logger.info("backfill_topics", count=len(backfill_topics))
+            backfill_tasks = [sync_one(topic) for topic in backfill_topics]
+            await asyncio.gather(*backfill_tasks)
+        else:
+            logger.info("backfill_not_needed")
+
     save_sync_state(
         {
             "last_sync_at": sync_start.isoformat(),
@@ -170,7 +183,7 @@ async def sync_incremental(
     )
 
     logger.info(
-        "incremental_sync_complete",
+        "sync_complete",
         synced=results["synced"],
         skipped=results["skipped"],
         failed=results["failed"],
@@ -179,43 +192,21 @@ async def sync_incremental(
 
 
 async def sync_ethresearch(
-    max_topics: int = 1000,
     force: bool = False,
     max_concurrent: int = 5,
-    incremental: bool = False,
     stats_only: bool = False,
 ) -> None:
     """Sync ethresear.ch topics to local cache."""
     cache = RawContentCache()
     loader = EthresearchLoader(cache=cache)
 
-    # Always show statistics first
     await show_statistics(cache)
 
     if stats_only:
         return
 
-    if incremental:
-        results = await sync_incremental(loader, max_concurrent=max_concurrent)
-    else:
-        # Show initial cache stats
-        initial_stats = cache.stats("ethresearch")
-        logger.info(
-            "starting_sync",
-            max_topics=max_topics,
-            force=force,
-            max_concurrent=max_concurrent,
-            cached_entries=initial_stats["entry_count"],
-        )
+    results = await sync(loader, force=force, max_concurrent=max_concurrent)
 
-        # Sync topics with parallel fetching
-        results = await loader.sync_latest_topics(
-            max_topics=max_topics,
-            force=force,
-            max_concurrent=max_concurrent,
-        )
-
-    # Show final cache stats
     final_stats = cache.stats("ethresearch")
     logger.info(
         "sync_finished",
@@ -230,12 +221,6 @@ async def sync_ethresearch(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Sync ethresear.ch topics to local cache")
     parser.add_argument(
-        "--max-topics",
-        type=int,
-        default=1000,
-        help="Maximum number of topics to sync (default: 1000, ignored with --incremental)",
-    )
-    parser.add_argument(
         "--max-concurrent",
         type=int,
         default=5,
@@ -248,12 +233,6 @@ def main() -> None:
         help="Force re-fetch even if cached (ignores staleness check)",
     )
     parser.add_argument(
-        "--incremental",
-        "-i",
-        action="store_true",
-        help="Only sync topics modified since last sync",
-    )
-    parser.add_argument(
         "--stats-only",
         "-s",
         action="store_true",
@@ -263,10 +242,8 @@ def main() -> None:
 
     asyncio.run(
         sync_ethresearch(
-            max_topics=args.max_topics,
             force=args.force,
             max_concurrent=args.max_concurrent,
-            incremental=args.incremental,
             stats_only=args.stats_only,
         )
     )

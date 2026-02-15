@@ -159,11 +159,11 @@ The system can also ingest discussions from ethresear.ch (Ethereum Research foru
 # Show statistics (forum total vs cached)
 uv run python scripts/sync_ethresearch.py --stats-only
 
-# Sync latest 1000 topics
-uv run python scripts/sync_ethresearch.py --max-topics 1000
+# Sync (incremental; first run fetches everything, subsequent runs only new activity)
+uv run python scripts/sync_ethresearch.py
 
-# Incremental sync (only topics modified since last sync)
-uv run python scripts/sync_ethresearch.py --incremental
+# Force re-fetch all topics regardless of cache
+uv run python scripts/sync_ethresearch.py --force
 ```
 
 ### Ingest cached topics into database

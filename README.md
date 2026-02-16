@@ -4,6 +4,8 @@ An agentic RAG system for Ethereum protocol knowledge. Ingests 20+ data sources 
 
 **Web UI:** http://localhost:3080 (after `docker compose up -d`)
 
+<img width="1472" height="1110" alt="image" src="https://github.com/user-attachments/assets/4439671f-5ddb-4f15-bdcc-46242e3b54c5" />
+
 ## Capabilities
 
 **Agentic retrieval.** A ReAct agent reasons about queries, retrieves evidence across multiple hops, reflects on quality, backtracks from dead ends, and synthesizes answers with full reasoning chain visibility.

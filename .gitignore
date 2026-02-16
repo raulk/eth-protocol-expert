@@ -71,15 +71,8 @@ dmypy.json
 .ipynb_checkpoints/
 *.ipynb_meta
 
-# Data directories
-data/eips/
-data/code/
-data/papers/
-data/transcripts/
-data/cache/
-data/consensus-specs/
-data/execution-specs/
-data/pm/
+# Data (cloned repos, caches, sync state; recreated by ingestion scripts)
+data/
 
 # Model caches
 .cache/
@@ -123,4 +116,3 @@ site/
 # uv
 .uv/
 uv.lock.bak
-data/research/

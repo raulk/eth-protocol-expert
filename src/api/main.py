@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from ..agents import AgentBudget, ReactAgent, RetrievalTool
 from ..config import DEFAULT_MODEL
-from ..embeddings.voyage_embedder import VoyageEmbedder
+from ..embeddings import Embedder, create_embedder
 from ..generation.cited_generator import CitedGenerator
 from ..generation.simple_generator import SimpleGenerator
 from ..generation.validated_generator import ValidatedGenerator
@@ -24,7 +24,7 @@ logger = structlog.get_logger()
 
 # Global instances (retriever/embedder/store are shared; generators are per-request)
 store: PgVectorStore | None = None
-embedder: VoyageEmbedder | None = None
+embedder: Embedder | None = None
 retriever: SimpleRetriever | None = None
 retrieval_tool: RetrievalTool | None = None
 nli_available: bool = False
@@ -49,7 +49,7 @@ async def lifespan(app: FastAPI):
     store = PgVectorStore()
     await store.connect()
 
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     retriever = SimpleRetriever(embedder=embedder, store=store)
     retrieval_tool = RetrievalTool(simple_retriever=retriever, default_limit=5)
 

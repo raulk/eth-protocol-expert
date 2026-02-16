@@ -12,7 +12,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking import PaperChunker, convert_chunks
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import ArxivFetcher, PDFExtractor, QualityScorer
 from src.storage import PgVectorStore
 
@@ -25,7 +25,7 @@ async def ingest_arxiv(max_papers: int = 300) -> None:
     fetcher = ArxivFetcher()
     extractor = PDFExtractor()
     scorer = QualityScorer()
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
     await store.connect()
     await store.initialize_schema()

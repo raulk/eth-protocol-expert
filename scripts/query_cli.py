@@ -19,8 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import structlog
 from dotenv import load_dotenv
 
-from src.embeddings.local_embedder import LocalEmbedder
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.generation.cited_generator import CitedGenerator
 from src.generation.simple_generator import SimpleGenerator
 from src.retrieval.simple_retriever import SimpleRetriever
@@ -95,7 +94,6 @@ async def query(
     mode: str = "cited",
     top_k: int = 10,
     show_sources: bool = True,
-    use_local_embeddings: bool = False,
     max_retrievals: int = 5,
     show_reasoning: bool = True,
 ):
@@ -107,10 +105,7 @@ async def query(
     await store.connect()
 
     try:
-        if use_local_embeddings:
-            embedder = LocalEmbedder()
-        else:
-            embedder = VoyageEmbedder()
+        embedder = create_embedder()
 
         if mode == "agentic":
             await run_agentic_query(
@@ -208,11 +203,6 @@ def main():
         help="Don't show sources",
     )
     parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Use local BGE embeddings instead of Voyage API",
-    )
-    parser.add_argument(
         "--max-retrievals",
         type=int,
         default=5,
@@ -232,7 +222,6 @@ def main():
             mode=args.mode,
             top_k=args.top_k,
             show_sources=not args.no_sources,
-            use_local_embeddings=args.local,
             max_retrievals=args.max_retrievals,
             show_reasoning=not args.no_reasoning,
         )

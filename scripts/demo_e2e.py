@@ -19,7 +19,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 async def demo_vector_search():
     """Phase 0/1: Simple vector search."""
-    from src.embeddings.voyage_embedder import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.retrieval.simple_retriever import SimpleRetriever
     from src.storage.pg_vector_store import PgVectorStore
 
@@ -30,7 +30,7 @@ async def demo_vector_search():
     store = PgVectorStore()
     await store.connect()
     try:
-        embedder = VoyageEmbedder()
+        embedder = create_embedder()
         retriever = SimpleRetriever(embedder, store)
 
         query = "What is EIP-1559 and how does the base fee work?"
@@ -50,7 +50,7 @@ async def demo_vector_search():
 
 async def demo_hybrid_search():
     """Phase 3: Hybrid search with BM25 + vectors."""
-    from src.embeddings.voyage_embedder import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.retrieval.hybrid_retriever import HybridRetriever
     from src.storage.pg_vector_store import PgVectorStore
 
@@ -61,7 +61,7 @@ async def demo_hybrid_search():
     store = PgVectorStore()
     await store.connect()
     try:
-        embedder = VoyageEmbedder()
+        embedder = create_embedder()
         retriever = HybridRetriever(embedder, store)
 
         query = "SELFDESTRUCT opcode deprecation"
@@ -81,7 +81,7 @@ async def demo_hybrid_search():
 
 async def demo_metadata_filter():
     """Phase 3: Metadata filtering."""
-    from src.embeddings.voyage_embedder import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.filters.metadata_filter import MetadataQuery
     from src.retrieval.hybrid_retriever import HybridRetriever
     from src.storage.pg_vector_store import PgVectorStore
@@ -93,7 +93,7 @@ async def demo_metadata_filter():
     store = PgVectorStore()
     await store.connect()
     try:
-        embedder = VoyageEmbedder()
+        embedder = create_embedder()
         retriever = HybridRetriever(embedder, store)
 
         filter_query = MetadataQuery(
@@ -249,7 +249,7 @@ async def demo_query_decomposition():
 
 async def demo_full_rag_pipeline():
     """Full RAG pipeline with generation."""
-    from src.embeddings.voyage_embedder import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.generation.cited_generator import CitedGenerator
     from src.retrieval.simple_retriever import SimpleRetriever
     from src.storage.pg_vector_store import PgVectorStore
@@ -261,7 +261,7 @@ async def demo_full_rag_pipeline():
     store = PgVectorStore()
     await store.connect()
     try:
-        embedder = VoyageEmbedder()
+        embedder = create_embedder()
         retriever = SimpleRetriever(embedder, store)
         generator = CitedGenerator(retriever)
 

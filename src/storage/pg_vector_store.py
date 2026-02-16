@@ -11,7 +11,7 @@ import asyncpg
 import structlog
 from pgvector.asyncpg import register_vector
 
-from ..embeddings.voyage_embedder import EmbeddedChunk
+from ..embeddings import EmbeddedChunk
 
 logger = structlog.get_logger()
 
@@ -43,13 +43,15 @@ class PgVectorStore:
     def __init__(
         self,
         database_url: str | None = None,
-        embedding_dim: int = 1024,
+        embedding_dim: int | None = None,
     ):
+        from ..config import EMBEDDING_DIM
+
         self.database_url = database_url or os.environ.get(
             "DATABASE_URL",
             "postgresql://postgres:postgres@localhost:5432/eth_protocol"
         )
-        self.embedding_dim = embedding_dim
+        self.embedding_dim = embedding_dim if embedding_dim is not None else EMBEDDING_DIM
         self.pool: asyncpg.Pool | None = None
 
     async def connect(self):

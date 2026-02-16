@@ -11,7 +11,7 @@ import os
 import structlog
 from dotenv import load_dotenv
 
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.generation import CitedGenerator
 from src.retrieval import SimpleRetriever
 from src.storage import PgVectorStore
@@ -32,7 +32,7 @@ async def validate_corpus() -> None:
     store = PgVectorStore()
     await store.connect()
 
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     retriever = SimpleRetriever(embedder, store)
 
     print("\n" + "=" * 60)

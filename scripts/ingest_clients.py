@@ -31,8 +31,7 @@ from dotenv import load_dotenv
 
 from src.chunking import Chunk
 from src.chunking.code_chunker import CodeChunk, CodeChunker
-from src.embeddings.code_embedder import CodeEmbedder
-from src.embeddings.voyage_embedder import EmbeddedChunk
+from src.embeddings import EmbeddedChunk, create_code_embedder
 from src.graph import FalkorDBStore, SpecImplLinker
 from src.parsing import CodeUnit, CodeUnitExtractor, TreeSitterParser
 from src.storage.pg_vector_store import PgVectorStore
@@ -350,7 +349,7 @@ async def ingest_client(
     code_chunks = chunker.chunk(all_units, language=repo.language)
     logger.info("chunking_complete", code_chunks=len(code_chunks))
 
-    embedder = CodeEmbedder()
+    embedder = create_code_embedder()
     store = PgVectorStore()
 
     await store.connect()

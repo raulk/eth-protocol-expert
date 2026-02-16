@@ -13,7 +13,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking import Chunk
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import ConsensusSpecLoader
 from src.storage import PgVectorStore
 
@@ -140,7 +140,7 @@ def chunk_markdown(
 async def ingest_consensus_specs() -> None:
     """Ingest consensus specs into the database."""
     loader = ConsensusSpecLoader()
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
     await store.connect()
     await store.initialize_schema()

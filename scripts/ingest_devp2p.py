@@ -23,7 +23,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import DevP2PLoader
 from src.ingestion.eip_parser import EIPSection
 from src.ingestion.markdown_spec_loader import MarkdownSpec
@@ -135,7 +135,7 @@ async def ingest_devp2p(
 
     loader = DevP2PLoader()
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

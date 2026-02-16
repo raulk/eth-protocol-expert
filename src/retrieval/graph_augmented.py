@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 
 import structlog
 
-from ..embeddings.voyage_embedder import VoyageEmbedder
+from ..embeddings import Embedder
 from ..graph.dependency_traverser import DependencyTraverser, TraversalDirection
 from ..graph.falkordb_store import FalkorDBStore
 from ..storage.pg_vector_store import PgVectorStore, SearchResult
@@ -59,7 +59,7 @@ class GraphAugmentedRetriever:
 
     def __init__(
         self,
-        embedder: VoyageEmbedder,
+        embedder: Embedder,
         vector_store: PgVectorStore,
         graph_store: FalkorDBStore,
         default_top_k: int = 10,

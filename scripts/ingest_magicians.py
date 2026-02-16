@@ -23,7 +23,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking import ForumChunker, convert_chunks
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import MagiciansLoader
 from src.storage import PgVectorStore
 
@@ -39,7 +39,6 @@ logger = structlog.get_logger()
 async def ingest_magicians(
     max_topics: int = 1000,
     batch_size: int = 50,
-    use_local_embeddings: bool = False,
 ) -> None:
     """Ingest Ethereum Magicians topics into the database."""
     load_dotenv()
@@ -50,7 +49,7 @@ async def ingest_magicians(
         batch_size=batch_size,
     )
 
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
     await store.connect()
     await store.initialize_schema()
@@ -150,18 +149,12 @@ def main() -> None:
         default=50,
         help="Batch size for storing chunks (default: 50)",
     )
-    parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Use local BGE embeddings instead of Voyage API",
-    )
     args = parser.parse_args()
 
     asyncio.run(
         ingest_magicians(
             max_topics=args.max_topics,
             batch_size=args.batch_size,
-            use_local_embeddings=args.local,
         )
     )
 

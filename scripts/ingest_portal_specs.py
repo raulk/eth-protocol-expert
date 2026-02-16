@@ -22,7 +22,7 @@ import structlog
 from dotenv import load_dotenv
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import MarkdownSpec, PortalSpecLoader
 from src.ingestion.eip_parser import EIPSection
 from src.storage.pg_vector_store import PgVectorStore
@@ -124,7 +124,7 @@ async def ingest_portal_specs(
     # Initialize components
     loader = PortalSpecLoader()
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

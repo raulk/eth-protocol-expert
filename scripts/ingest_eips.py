@@ -26,8 +26,7 @@ from dotenv import load_dotenv
 
 from src.chunking.fixed_chunker import FixedChunker
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.local_embedder import LocalEmbedder
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.graph import EIPGraphBuilder, FalkorDBStore
 from src.ingestion.eip_loader import EIPLoader
 from src.ingestion.eip_parser import EIPParser
@@ -47,13 +46,12 @@ async def ingest_eips(
     data_dir: str = "data/eips",
     use_section_chunking: bool = True,
     batch_size: int = 50,
-    use_local_embeddings: bool = False,
     limit: int | None = None,
 ):
     """Main ingestion pipeline."""
     load_dotenv()
 
-    logger.info("starting_ingestion", data_dir=data_dir, section_chunking=use_section_chunking, local_embeddings=use_local_embeddings)
+    logger.info("starting_ingestion", data_dir=data_dir, section_chunking=use_section_chunking)
 
     # Initialize components
     loader = EIPLoader(data_dir=data_dir)
@@ -64,10 +62,7 @@ async def ingest_eips(
     else:
         chunker = FixedChunker(max_tokens=512, overlap_tokens=64)
 
-    if use_local_embeddings:
-        embedder = LocalEmbedder()  # Uses BGE-large, 1024 dims, no API needed
-    else:
-        embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     # Connect to database
@@ -213,11 +208,6 @@ def main():
         help="Batch size for storing chunks",
     )
     parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Use local BGE embeddings instead of Voyage API (no API key needed)",
-    )
-    parser.add_argument(
         "--limit",
         type=int,
         default=None,
@@ -232,7 +222,6 @@ def main():
         data_dir=args.data_dir,
         use_section_chunking=use_section,
         batch_size=args.batch_size,
-        use_local_embeddings=args.local,
         limit=args.limit,
     ))
 

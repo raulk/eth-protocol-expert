@@ -12,13 +12,13 @@ An agentic RAG system for Ethereum protocol knowledge. Ingests 20+ data sources 
 
 **Hybrid search.** BM25 full-text search combined with vector similarity (Voyage AI), fused via Reciprocal Rank Fusion. Graph-augmented retrieval follows EIP dependency chains. Adaptive budget allocation scales retrieval effort to query complexity.
 
-**Claim validation.** Responses are decomposed into atomic claims, each verified against source evidence using Natural Language Inference. Claims are classified as supported, weakly supported, or unsupported, with a trustworthiness ratio.
+**Claim validation.** Responses can be decomposed into atomic claims, each verified against source evidence using Natural Language Inference. Claims are classified as supported, weakly supported, or unsupported. (Currently disabled at runtime; the NLI model dependencies are not installed by default.)
 
 **Knowledge graph.** FalkorDB stores EIP dependencies (REQUIRES, SUPERSEDES), cross-references, citation links, and inferred relationships with confidence scores. Spec-to-implementation linking maps EIPs to Go/Rust client code.
 
 **Structured outputs.** Timelines, argument maps (pro/con analysis), comparison tables, and dependency graph visualizations generated from retrieved evidence.
 
-**Multi-model ensemble.** Cost-aware routing (haiku/sonnet/opus) based on query complexity. Parallel model execution with confidence calibration, circuit breaking for low-evidence queries, and A/B testing.
+**Multi-provider LLM.** Generation routes through a unified completion layer (litellm) supporting Anthropic, Google Gemini, and OpenRouter (hundreds of models). The frontend exposes a searchable model picker with per-token pricing. Cost-aware routing, confidence calibration, and circuit breaking for low-evidence queries.
 
 ## Data sources
 
@@ -90,7 +90,7 @@ just query "How does EIP-1559 interact with EIP-4844?" agentic
 |------|-------------|
 | `simple` | Fast generation with retrieved context |
 | `cited` | Inline citations with source attribution |
-| `validated` | NLI verification flags unsupported claims |
+| `validated` | NLI verification flags unsupported claims (requires torch/transformers; disabled by default) |
 | `agentic` | ReAct loop with multi-hop reasoning and backtracking |
 | `graph` | Dependency-aware retrieval following EIP relationships |
 
@@ -103,7 +103,7 @@ src/
 ├── embeddings/      # Voyage AI (voyage-4-large), code embeddings (voyage-code-3)
 ├── storage/         # PostgreSQL + pgvector
 ├── retrieval/       # Vector, BM25, hybrid, graph-augmented, reranked, staged
-├── generation/      # Simple, cited, validated, synthesis generators
+├── generation/      # Simple, cited, validated, synthesis generators (multi-provider via completion.py)
 ├── validation/      # NLI claim verification, claim decomposition
 ├── evidence/        # Evidence spans, ledgers, support classification
 ├── concepts/        # Alias tables, query expansion, concept resolution
@@ -128,7 +128,8 @@ just api
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/query` | POST | Query with configurable mode |
+| `/query` | POST | Query with configurable mode, model, and max tokens |
+| `/models` | GET | Available models with pricing (Anthropic, Gemini, OpenRouter) |
 | `/health` | GET | Health check with document/chunk counts |
 | `/stats` | GET | System statistics |
 | `/eip/{number}` | GET | EIP metadata and chunks |
@@ -144,10 +145,11 @@ just api
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `VOYAGE_API_KEY` | Yes | Voyage AI for embeddings |
-| `ANTHROPIC_API_KEY` | Yes | Anthropic for generation |
+| `ANTHROPIC_API_KEY` | Yes | Anthropic for generation (default provider) |
 | `POSTGRES_PASSWORD` | Yes | PostgreSQL password |
+| `GEMINI_API_KEY` | No | Google Gemini models |
+| `OPENROUTER_API_KEY` | No | OpenRouter (hundreds of models) |
 | `DATABASE_URL` | No | Full PostgreSQL connection URL (auto-generated if not set) |
-| `HF_TOKEN` | No | HuggingFace token (for gated NLI models) |
 
 ## Development
 

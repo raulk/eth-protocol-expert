@@ -6,12 +6,9 @@ Phase 8 enhancements:
 - Dynamic retrieval strategy based on query characteristics
 """
 
-import asyncio
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 
-import anthropic
 import structlog
 
 from src.agents.backtrack import Backtracker
@@ -20,6 +17,7 @@ from src.agents.query_analyzer import QueryAnalyzer
 from src.agents.reflection import Reflector
 from src.agents.retrieval_tool import RetrievalMode, RetrievalTool
 from src.config import DEFAULT_MODEL
+from src.generation.completion import call_llm
 
 logger = structlog.get_logger()
 
@@ -167,8 +165,8 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
         self,
         retrieval_tool: RetrievalTool,
         budget: AgentBudget | None = None,
-        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
+        max_tokens: int = 2048,
         enable_reflection: bool = True,
         enable_backtracking: bool = True,
         enable_adaptive_budget: bool = True,
@@ -176,21 +174,17 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
         self.retrieval_tool = retrieval_tool
         self.budget = budget or AgentBudget()
         self.budget_enforcer = BudgetEnforcer(self.budget)
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         self.enable_adaptive_budget = enable_adaptive_budget
         self.query_analyzer = QueryAnalyzer() if enable_adaptive_budget else None
 
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
         self.model = model
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.max_tokens = max_tokens
 
         self.enable_reflection = enable_reflection
         self.enable_backtracking = enable_backtracking
 
         if enable_reflection:
-            self.reflector = Reflector(api_key=self.api_key, model=model)
+            self.reflector = Reflector(model=model)
         else:
             self.reflector = None
 
@@ -399,14 +393,8 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
             budget_remaining=state.budget_remaining,
         )
 
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        response_text = response.content[0].text.strip()
+        result = await call_llm(self.model, [{"role": "user", "content": prompt}], max_tokens=512)
+        response_text = result.text.strip()
 
         action, action_input = self._parse_action(response_text)
 
@@ -457,11 +445,5 @@ Provide a clear, accurate, and comprehensive answer. If some information is miss
             thought_history=state.get_thought_history(),
         )
 
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        return response.content[0].text.strip()
+        result = await call_llm(self.model, [{"role": "user", "content": prompt}], self.max_tokens)
+        return result.text.strip()

@@ -1,9 +1,11 @@
 """FastAPI application for Ethereum Protocol Intelligence System."""
 
 import os
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime
 
+import httpx
 import structlog
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -20,46 +22,45 @@ from ..storage.pg_vector_store import PgVectorStore
 
 logger = structlog.get_logger()
 
-# Global instances
+# Global instances (retriever/embedder/store are shared; generators are per-request)
 store: PgVectorStore | None = None
 embedder: VoyageEmbedder | None = None
 retriever: SimpleRetriever | None = None
 retrieval_tool: RetrievalTool | None = None
-simple_generator: SimpleGenerator | None = None
-cited_generator: CitedGenerator | None = None
-validated_generator: ValidatedGenerator | None = None
+nli_available: bool = False
 graph_store: FalkorDBStore | None = None
 dependency_traverser: DependencyTraverser | None = None
+
+# Live OpenRouter model cache (supplements litellm.model_cost for new models)
+_openrouter_cache: list | None = None
+_openrouter_cache_time: float = 0
+OPENROUTER_CACHE_TTL = 300
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifecycle."""
     global store, embedder, retriever, retrieval_tool
-    global simple_generator, cited_generator, validated_generator
+    global nli_available
     global graph_store, dependency_traverser
 
     logger.info("starting_application")
 
-    # Initialize components
     store = PgVectorStore()
     await store.connect()
 
     embedder = VoyageEmbedder()
     retriever = SimpleRetriever(embedder=embedder, store=store)
     retrieval_tool = RetrievalTool(simple_retriever=retriever, default_limit=5)
-    simple_generator = SimpleGenerator(retriever=retriever)
-    cited_generator = CitedGenerator(retriever=retriever)
 
-    # Validated generator is optional (requires NLI model)
+    # Check NLI availability once at startup
     try:
-        validated_generator = ValidatedGenerator(retriever=retriever)
-        logger.info("validated_generator_initialized")
+        ValidatedGenerator(retriever=retriever)
+        nli_available = True
+        logger.info("nli_model_available")
     except Exception as e:
-        logger.warning("validated_generator_not_available", error=str(e))
-        validated_generator = None
+        logger.warning("nli_model_not_available", error=str(e))
 
-    # Initialize graph store (optional - continues if unavailable)
     try:
         graph_store = FalkorDBStore(
             host=os.environ.get("FALKORDB_HOST", "localhost"),
@@ -75,7 +76,6 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Cleanup
     if graph_store:
         graph_store.close()
     await store.close()
@@ -92,32 +92,32 @@ app = FastAPI(
 
 # Request/Response models
 
+
 class QueryRequest(BaseModel):
     """Query request model."""
+
     query: str = Field(..., description="The question to answer")
     top_k: int = Field(default=10, ge=1, le=50, description="Number of chunks to retrieve")
     mode: str = Field(
         default="cited",
-        description="Generation mode: 'simple', 'cited', 'validated', 'agentic', or 'graph'"
+        description="Generation mode: 'simple', 'cited', 'validated', 'agentic', or 'graph'",
     )
+    model: str | None = Field(default=None, description="Model ID (default: claude-opus-4-6)")
+    max_tokens: int = Field(default=2048, ge=256, le=16384, description="Max output tokens")
     validate: bool = Field(
-        default=True,
-        description="Run NLI validation (only for 'validated' mode)"
+        default=True, description="Run NLI validation (only for 'validated' mode)"
     )
     max_retrievals: int = Field(
-        default=5,
-        ge=1,
-        le=10,
-        description="Max retrieval attempts for 'agentic' mode"
+        default=5, ge=1, le=10, description="Max retrieval attempts for 'agentic' mode"
     )
     include_dependencies: bool = Field(
-        default=True,
-        description="Include EIP dependencies in 'graph' mode"
+        default=True, description="Include EIP dependencies in 'graph' mode"
     )
 
 
 class EvidenceSource(BaseModel):
     """Evidence source in response."""
+
     document_id: str
     section: str | None
     similarity: float
@@ -129,6 +129,7 @@ class EvidenceSource(BaseModel):
 
 class QueryResponse(BaseModel):
     """Query response model."""
+
     query: str
     response: str
     sources: list[EvidenceSource]
@@ -157,6 +158,7 @@ class QueryResponse(BaseModel):
 
 class HealthResponse(BaseModel):
     """Health check response."""
+
     status: str
     timestamp: str
     chunks_count: int
@@ -165,12 +167,14 @@ class HealthResponse(BaseModel):
 
 class StatsResponse(BaseModel):
     """Statistics response."""
+
     total_documents: int
     total_chunks: int
     database_connected: bool
 
 
 # Endpoints
+
 
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
@@ -267,21 +271,17 @@ async def enrich_sources(sources: list[EvidenceSource]) -> list[EvidenceSource]:
 
 @app.post("/query", response_model=QueryResponse)
 async def query(request: QueryRequest):
-    """Query the system with a question about Ethereum protocol.
+    """Query the system with a question about Ethereum protocol."""
+    effective_model = request.model or DEFAULT_MODEL
 
-    Modes:
-    - simple: Basic RAG (Phase 0) - fast, no citations
-    - cited: With citations (Phase 1) - includes source references
-    - validated: With NLI validation (Phase 2) - verifies claims against evidence
-    - agentic: ReAct agent (Phase 8) - iterative retrieval with reasoning chain
-    """
     try:
         if request.mode == "simple":
-            # Phase 0: Simple generation
-            result = await simple_generator.generate(
-                query=request.query,
-                top_k=request.top_k,
+            gen = SimpleGenerator(
+                retriever=retriever,
+                model=effective_model,
+                max_tokens=request.max_tokens,
             )
+            result = await gen.generate(query=request.query, top_k=request.top_k)
 
             sources = [
                 EvidenceSource(
@@ -304,11 +304,12 @@ async def query(request: QueryRequest):
             )
 
         elif request.mode == "cited":
-            # Phase 1: With citations
-            result = await cited_generator.generate(
-                query=request.query,
-                top_k=request.top_k,
+            gen = CitedGenerator(
+                retriever=retriever,
+                model=effective_model,
+                max_tokens=request.max_tokens,
             )
+            result = await gen.generate(query=request.query, top_k=request.top_k)
 
             sources = [
                 EvidenceSource(
@@ -331,14 +332,17 @@ async def query(request: QueryRequest):
             )
 
         elif request.mode == "validated":
-            # Phase 2: With validation
-            if validated_generator is None:
+            if not nli_available:
                 raise HTTPException(
-                    status_code=501,
-                    detail="Validated mode not available (NLI model not loaded)"
+                    status_code=501, detail="Validated mode not available (NLI model not loaded)"
                 )
 
-            result = await validated_generator.generate(
+            gen = ValidatedGenerator(
+                retriever=retriever,
+                model=effective_model,
+                max_tokens=request.max_tokens,
+            )
+            result = await gen.generate(
                 query=request.query,
                 top_k=request.top_k,
                 validate=request.validate,
@@ -355,7 +359,7 @@ async def query(request: QueryRequest):
 
             validation_report = None
             if request.validate:
-                validation_report = validated_generator.get_validation_report(result)
+                validation_report = gen.get_validation_report(result)
 
             return QueryResponse(
                 query=request.query,
@@ -373,7 +377,6 @@ async def query(request: QueryRequest):
             )
 
         elif request.mode == "agentic":
-            # Phase 8: Agentic retrieval with ReAct loop
             budget = AgentBudget(
                 max_retrievals=request.max_retrievals,
                 max_tokens=10000,
@@ -383,6 +386,8 @@ async def query(request: QueryRequest):
             agent = ReactAgent(
                 retrieval_tool=retrieval_tool,
                 budget=budget,
+                model=effective_model,
+                max_tokens=request.max_tokens,
                 enable_reflection=True,
                 enable_backtracking=True,
             )
@@ -398,17 +403,14 @@ async def query(request: QueryRequest):
                 for r in result.retrievals
             ]
 
-            reasoning_chain = [
-                f"{t.action.value}: {t.content[:200]}"
-                for t in result.thoughts
-            ]
+            reasoning_chain = [f"{t.action.value}: {t.content[:200]}" for t in result.thoughts]
 
             return QueryResponse(
                 query=request.query,
                 response=result.answer,
                 sources=sources,
                 mode="agentic",
-                model=DEFAULT_MODEL,
+                model=effective_model,
                 input_tokens=result.total_tokens_retrieved,
                 output_tokens=0,
                 llm_calls=result.llm_calls,
@@ -418,18 +420,15 @@ async def query(request: QueryRequest):
             )
 
         elif request.mode == "graph":
-            # Phase 4: Graph-augmented retrieval
             if graph_store is None or dependency_traverser is None:
-                raise HTTPException(
-                    status_code=503,
-                    detail="Graph database not available"
-                )
+                raise HTTPException(status_code=503, detail="Graph database not available")
 
-            # First do standard cited generation
-            result = await cited_generator.generate(
-                query=request.query,
-                top_k=request.top_k,
+            gen = CitedGenerator(
+                retriever=retriever,
+                model=effective_model,
+                max_tokens=request.max_tokens,
             )
+            result = await gen.generate(query=request.query, top_k=request.top_k)
 
             sources = [
                 EvidenceSource(
@@ -440,32 +439,28 @@ async def query(request: QueryRequest):
                 for r in result.retrieval.results
             ]
 
-            # Extract EIP numbers from sources and get graph context
             related_eips: list[int] = []
             dependency_chain: list[int] = []
 
             if request.include_dependencies:
                 import re
+
                 eip_numbers = set()
                 for source in sources:
                     match = re.match(r"eip-(\d+)", source.document_id)
                     if match:
                         eip_numbers.add(int(match.group(1)))
 
-                # Get dependencies for each mentioned EIP
                 for eip_num in eip_numbers:
                     try:
                         deps = dependency_traverser.get_dependencies(eip_num, max_depth=2)
                         related_eips.extend(deps.direct_dependencies)
                         related_eips.extend(deps.direct_dependents)
                         if deps.all_dependencies:
-                            dependency_chain.extend(
-                                [d.eip_number for d in deps.all_dependencies]
-                            )
+                            dependency_chain.extend([d.eip_number for d in deps.all_dependencies])
                     except Exception as e:
                         logger.debug("graph_lookup_failed", eip=eip_num, error=str(e))
 
-                # Deduplicate while preserving order
                 related_eips = list(dict.fromkeys(related_eips))
                 dependency_chain = list(dict.fromkeys(dependency_chain))
 
@@ -484,7 +479,7 @@ async def query(request: QueryRequest):
         else:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown mode: {request.mode}. Use 'simple', 'cited', 'validated', 'agentic', or 'graph'."
+                detail=f"Unknown mode: {request.mode}. Use 'simple', 'cited', 'validated', 'agentic', or 'graph'.",
             )
 
     except HTTPException:
@@ -492,6 +487,112 @@ async def query(request: QueryRequest):
     except Exception as e:
         logger.exception("query_failed", query=request.query[:50])
         raise HTTPException(status_code=500, detail=str(e)) from e
+
+
+class ModelPricing(BaseModel):
+    """Per-model pricing in $/1M tokens."""
+
+    input: float
+    output: float
+
+
+class ModelOption(BaseModel):
+    """A model available for selection."""
+
+    id: str
+    name: str
+    provider: str
+    pricing: ModelPricing
+
+
+PROVIDER_MAP = {
+    "anthropic": "Anthropic",
+    "gemini": "Google",
+    "vertex_ai": "Google",
+    "openai": "OpenAI",
+    "openrouter": "OpenRouter",
+    "azure": "Azure",
+    "bedrock": "AWS Bedrock",
+    "cohere_chat": "Cohere",
+    "mistral": "Mistral",
+    "groq": "Groq",
+    "deepseek": "DeepSeek",
+    "fireworks_ai": "Fireworks",
+    "together_ai": "Together",
+    "perplexity": "Perplexity",
+}
+
+
+async def _fetch_openrouter_models() -> list[ModelOption]:
+    """Live-fetch OpenRouter models to catch models newer than the litellm release."""
+    global _openrouter_cache, _openrouter_cache_time
+
+    if (
+        _openrouter_cache is not None
+        and (time.time() - _openrouter_cache_time) < OPENROUTER_CACHE_TTL
+    ):
+        return _openrouter_cache
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.get("https://openrouter.ai/api/v1/models")
+            resp.raise_for_status()
+
+        models = []
+        for m in resp.json().get("data", []):
+            pricing = m.get("pricing", {})
+            input_price = float(pricing.get("prompt", 0)) * 1_000_000
+            output_price = float(pricing.get("completion", 0)) * 1_000_000
+            models.append(
+                ModelOption(
+                    id=f"openrouter/{m['id']}",
+                    name=m.get("name", m["id"]),
+                    provider="OpenRouter",
+                    pricing=ModelPricing(
+                        input=round(input_price, 2), output=round(output_price, 2)
+                    ),
+                )
+            )
+
+        _openrouter_cache = models
+        _openrouter_cache_time = time.time()
+        return models
+    except Exception as e:
+        logger.warning("openrouter_models_fetch_failed", error=str(e))
+        return _openrouter_cache or []
+
+
+@app.get("/models", response_model=list[ModelOption])
+async def list_models():
+    """List models from litellm.model_cost (static) + live OpenRouter API (for newest models)."""
+    from litellm import model_cost
+
+    models: list[ModelOption] = []
+
+    # Static models from litellm's bundled cost map (all providers except OpenRouter)
+    for model_id, info in model_cost.items():
+        litellm_provider = info.get("litellm_provider", "")
+        provider = PROVIDER_MAP.get(litellm_provider, litellm_provider)
+        if not provider or litellm_provider == "openrouter":
+            continue
+
+        input_price = float(info.get("input_cost_per_token", 0)) * 1_000_000
+        output_price = float(info.get("output_cost_per_token", 0)) * 1_000_000
+
+        models.append(
+            ModelOption(
+                id=model_id,
+                name=model_id,
+                provider=provider,
+                pricing=ModelPricing(input=round(input_price, 2), output=round(output_price, 2)),
+            )
+        )
+
+    # Live OpenRouter models (always fresh)
+    openrouter_models = await _fetch_openrouter_models()
+    models.extend(openrouter_models)
+
+    return models
 
 
 @app.get("/eip/{eip_number}")
@@ -557,6 +658,7 @@ async def search(
 
 
 # Graph endpoints
+
 
 @app.get("/eip/{eip_number}/dependencies")
 async def get_eip_dependencies(eip_number: int, depth: int = 3):
@@ -655,12 +757,7 @@ async def get_most_depended_upon(limit: int = 10):
 
     try:
         results = dependency_traverser.get_most_depended_upon(limit=limit)
-        return {
-            "most_depended": [
-                {"eip": eip, "dependent_count": count}
-                for eip, count in results
-            ]
-        }
+        return {"most_depended": [{"eip": eip, "dependent_count": count} for eip, count in results]}
     except Exception as e:
         logger.exception("most_depended_failed")
         raise HTTPException(status_code=500, detail=str(e)) from e

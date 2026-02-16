@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .markdown_spec_loader import MarkdownSpec, MarkdownSpecLoader
+from .markdown_spec_loader import MarkdownSpecLoader
 
 
 class DevP2PLoader(MarkdownSpecLoader):

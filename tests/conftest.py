@@ -1,8 +1,9 @@
 """Shared test fixtures for Ethereum Protocol Intelligence System."""
 
-import pytest
 from dataclasses import dataclass
 from datetime import datetime
+
+import pytest
 
 
 @dataclass

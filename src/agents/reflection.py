@@ -1,13 +1,11 @@
 """Reflection - Agent self-assessment of retrieval sufficiency."""
 
-import asyncio
-import os
 from dataclasses import dataclass
 
-import anthropic
 import structlog
 
 from ..config import DEFAULT_MODEL
+from ..generation.completion import call_llm
 
 logger = structlog.get_logger()
 
@@ -67,17 +65,11 @@ Only respond with the JSON object, no other text."""
 
     def __init__(
         self,
-        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         confidence_threshold: float = 0.7,
     ):
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
         self.model = model
         self.confidence_threshold = confidence_threshold
-        self.client = anthropic.Anthropic(api_key=self.api_key)
 
     async def reflect(
         self,
@@ -104,14 +96,10 @@ Only respond with the JSON object, no other text."""
             retrieved=retrieved_text,
         )
 
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=512,
-            messages=[{"role": "user", "content": prompt}],
+        completion = await call_llm(
+            self.model, [{"role": "user", "content": prompt}], max_tokens=512
         )
-
-        result = self._parse_response(response.content[0].text)
+        result = self._parse_response(completion.text)
 
         logger.debug(
             "reflection_complete",

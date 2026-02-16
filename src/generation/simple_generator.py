@@ -1,14 +1,12 @@
 """Simple Generator - Basic RAG generation for Phase 0."""
 
-import asyncio
-import os
 from dataclasses import dataclass
 
-import anthropic
 import structlog
 
 from ..config import DEFAULT_MODEL
 from ..retrieval.simple_retriever import RetrievalResult, SimpleRetriever
+from .completion import call_llm
 
 logger = structlog.get_logger()
 
@@ -16,6 +14,7 @@ logger = structlog.get_logger()
 @dataclass
 class GenerationResult:
     """Result from generation."""
+
     query: str
     response: str
     retrieval: RetrievalResult
@@ -34,18 +33,14 @@ class SimpleGenerator:
     def __init__(
         self,
         retriever: SimpleRetriever,
-        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         max_context_tokens: int = 8000,
+        max_tokens: int = 2048,
     ):
         self.retriever = retriever
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
         self.model = model
         self.max_context_tokens = max_context_tokens
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.max_tokens = max_tokens
 
     async def generate(
         self,
@@ -73,31 +68,23 @@ class SimpleGenerator:
         # Build prompt
         prompt = self._build_prompt(query, context)
 
-        # Generate response
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        answer = response.content[0].text
+        result = await call_llm(self.model, [{"role": "user", "content": prompt}], self.max_tokens)
 
         logger.info(
             "generated_response",
             query=query[:50],
             context_chunks=len(retrieval.results),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
 
         return GenerationResult(
             query=query,
-            response=answer,
+            response=result.text,
             retrieval=retrieval,
             model=self.model,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
 
     def _build_prompt(self, query: str, context: str) -> str:

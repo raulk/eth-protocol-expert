@@ -38,6 +38,8 @@ services:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD}@postgres:5432/eth_protocol
       VOYAGE_API_KEY: ${VOYAGE_API_KEY}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       FALKORDB_HOST: falkordb
       FALKORDB_PORT: 6379
     depends_on:

@@ -1,8 +1,8 @@
 """Loader for ethereum/execution-specs repository."""
 
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
 
 import structlog
 

@@ -3,7 +3,6 @@
 These are self-contained unit tests that don't require external dependencies.
 """
 
-import pytest
 import re
 from dataclasses import dataclass, field
 from enum import Enum

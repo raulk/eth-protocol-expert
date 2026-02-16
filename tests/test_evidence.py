@@ -1,10 +1,10 @@
 """Tests for evidence tracking."""
 
-import pytest
-from datetime import datetime
 
+import pytest
+
+from src.evidence.evidence_ledger import EvidenceLedger
 from src.evidence.evidence_span import EvidenceSpan
-from src.evidence.evidence_ledger import EvidenceLedger, Claim, SupportLevel
 
 
 class TestEvidenceSpan:

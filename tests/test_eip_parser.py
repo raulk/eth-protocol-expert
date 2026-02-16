@@ -1,12 +1,12 @@
 """Tests for EIP parser."""
 
-import pytest
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 from src.ingestion.eip_loader import LoadedEIP
 from src.ingestion.eip_parser import EIPParser
-
 
 # Sample EIP content for testing
 SAMPLE_EIP_CONTENT = """---

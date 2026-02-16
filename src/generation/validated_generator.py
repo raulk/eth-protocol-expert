@@ -1,12 +1,9 @@
 """Validated Generator - RAG generation with citation validation (Phase 2)."""
 
-import asyncio
-import os
 import re
 import uuid
 from dataclasses import dataclass
 
-import anthropic
 import structlog
 
 from ..config import DEFAULT_MODEL
@@ -16,6 +13,7 @@ from ..retrieval.simple_retriever import RetrievalResult, SimpleRetriever
 from ..validation.citation_enforcer import CitationEnforcer, ResponseVerifier
 from ..validation.claim_decomposer import ClaimDecomposer, HybridDecomposer
 from ..validation.nli_validator import CitationValidation, NLIValidator
+from .completion import call_llm
 
 logger = structlog.get_logger()
 
@@ -79,33 +77,25 @@ class ValidatedGenerator:
     def __init__(
         self,
         retriever: SimpleRetriever,
-        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         max_context_tokens: int = 8000,
+        max_tokens: int = 2048,
         use_claim_decomposition: bool = True,
         nli_device: str | None = None,
     ):
         self.retriever = retriever
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
         self.model = model
         self.max_context_tokens = max_context_tokens
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.max_tokens = max_tokens
 
-        # Initialize validation components
         self.nli_validator = NLIValidator(device=nli_device, use_minimal_spans=True)
         self.use_decomposition = use_claim_decomposition
 
         if use_claim_decomposition:
-            self.decomposer = HybridDecomposer(
-                llm_decomposer=ClaimDecomposer(api_key=self.api_key, model=model)
-            )
+            self.decomposer = HybridDecomposer(llm_decomposer=ClaimDecomposer(model=model))
         else:
             self.decomposer = None
 
-        # Phase 7: Citation enforcement and response verification
         self.citation_enforcer = CitationEnforcer()
         self.response_verifier = ResponseVerifier()
 
@@ -134,15 +124,8 @@ class ValidatedGenerator:
         # Build prompt
         prompt = self._build_prompt(query, context)
 
-        # Generate response
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        raw_response = response.content[0].text
+        result = await call_llm(self.model, [{"role": "user", "content": prompt}], self.max_tokens)
+        raw_response = result.text
 
         # Build evidence ledger
         evidence_ledger = self._build_evidence_ledger(
@@ -198,8 +181,8 @@ class ValidatedGenerator:
             contradicted=contradicted,
             citation_compliant=citation_result.is_compliant,
             uncited_factual=citation_result.uncited_factual,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
 
         return ValidatedGenerationResult(
@@ -210,8 +193,8 @@ class ValidatedGenerator:
             validations=validations,
             retrieval=retrieval,
             model=self.model,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
             total_claims=total_claims,
             supported_claims=supported,
             weak_claims=weak,

@@ -13,6 +13,7 @@ dependencies = [
     "voyageai>=0.3.0rc0",
 
     # LLM
+    "litellm>=1.60.0",
     "anthropic>=0.40.0",
 
     # Reranking (Phase 3)

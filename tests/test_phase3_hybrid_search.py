@@ -3,9 +3,10 @@
 These are self-contained unit tests that don't require external dependencies.
 """
 
-import pytest
 from dataclasses import dataclass
 from datetime import datetime
+
+import pytest
 
 
 @dataclass

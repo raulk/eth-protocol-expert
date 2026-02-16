@@ -1,14 +1,14 @@
 """Tests for chunking implementations."""
 
-import pytest
 from datetime import datetime
 from pathlib import Path
 
-from src.ingestion.eip_loader import LoadedEIP
-from src.ingestion.eip_parser import EIPParser, ParsedEIP
+import pytest
+
 from src.chunking.fixed_chunker import FixedChunker
 from src.chunking.section_chunker import SectionChunker
-
+from src.ingestion.eip_loader import LoadedEIP
+from src.ingestion.eip_parser import EIPParser
 
 SAMPLE_EIP_CONTENT = """---
 eip: 1559

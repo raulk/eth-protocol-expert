@@ -3,9 +3,10 @@
 These are self-contained unit tests that don't require FalkorDB.
 """
 
-import pytest
 from dataclasses import dataclass
 from enum import Enum
+
+import pytest
 
 
 @dataclass

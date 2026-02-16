@@ -14,7 +14,6 @@ import argparse
 import asyncio
 import sys
 import time
-from datetime import datetime, UTC
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -22,8 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 import structlog
 from dotenv import load_dotenv
 
-from src.ingestion.orchestrator import IngestionOrchestrator, GitHubSyncer
-from src.storage.pg_vector_store import PgVectorStore
+from src.ingestion.orchestrator import IngestionOrchestrator
 
 structlog.configure(
     processors=[

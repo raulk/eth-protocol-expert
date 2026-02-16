@@ -1,7 +1,8 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import type { FormEvent, CSSProperties } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import Markdown from 'react-markdown'
+import uFuzzy from '@leeoniya/ufuzzy'
 
 type QueryMode = 'simple' | 'cited' | 'validated' | 'agentic' | 'graph'
 
@@ -50,6 +51,15 @@ const MODE_DESCRIPTIONS: Record<QueryMode, string> = {
   graph: 'With EIP dependencies',
 }
 
+interface ModelOption {
+  id: string
+  name: string
+  provider: string
+  pricing: { input: number; output: number }
+}
+
+const uf = new uFuzzy({ intraMode: 1, intraIns: 1 })
+
 const EXAMPLE_QUERIES = [
   'What is EIP-1559?',
   'How does EIP-4844 reduce gas costs?',
@@ -67,6 +77,42 @@ function App() {
   const [health, setHealth] = useState<HealthResponse | null>(null)
   const [expandedSources, setExpandedSources] = useState<Set<number>>(new Set())
   const [glowActive, setGlowActive] = useState(true)
+  const [selectedModel, setSelectedModel] = useState<string | null>(null)
+  const [maxTokens, setMaxTokens] = useState(2048)
+  const [modelDropdownOpen, setModelDropdownOpen] = useState(false)
+  const [modelSearch, setModelSearch] = useState('')
+  const [allModels, setAllModels] = useState<ModelOption[]>([])
+  const [modelsLoading, setModelsLoading] = useState(false)
+
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const modelHaystack = useMemo(() => allModels.map((m) => `${m.name} ${m.id}`), [allModels])
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setModelDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const handleModelDropdownOpen = async () => {
+    setModelDropdownOpen((prev) => !prev)
+    if (allModels.length > 0) return
+    setModelsLoading(true)
+    try {
+      const res = await fetch('/api/models')
+      if (res.ok) {
+        const data: ModelOption[] = await res.json()
+        setAllModels(data)
+      }
+    } catch {
+      // Models list is best-effort
+    } finally {
+      setModelsLoading(false)
+    }
+  }
 
   const checkHealth = useCallback(async () => {
     try {
@@ -102,6 +148,8 @@ function App() {
           mode,
           top_k: topK,
           validate: mode === 'validated',
+          model: selectedModel,
+          max_tokens: maxTokens,
         }),
       })
 
@@ -213,6 +261,113 @@ function App() {
                   onChange={(e) => setTopK(Math.max(1, Math.min(50, parseInt(e.target.value) || 10)))}
                   min={1}
                   max={50}
+                />
+              </div>
+
+              <div className="option-group model-dropdown" ref={dropdownRef}>
+                <span className="option-label">Model</span>
+                <button
+                  type="button"
+                  className="model-trigger"
+                  onClick={handleModelDropdownOpen}
+                >
+                  {selectedModel
+                    ? allModels.find((m) => m.id === selectedModel)?.name ?? selectedModel
+                    : 'Default'}
+                  <span className="chevron">{modelDropdownOpen ? '\u25B4' : '\u25BE'}</span>
+                </button>
+                {modelDropdownOpen && (
+                  <div className="model-panel">
+                    <input
+                      type="text"
+                      className="model-search"
+                      placeholder="Search models..."
+                      value={modelSearch}
+                      onChange={(e) => setModelSearch(e.target.value)}
+                      autoFocus
+                    />
+                    {modelsLoading ? (
+                      <div className="model-section-label">Loading...</div>
+                    ) : (
+                      (() => {
+                        let filtered: ModelOption[]
+                        if (!modelSearch.trim()) {
+                          filtered = allModels
+                        } else {
+                          const [idxs, , order] = uf.search(modelHaystack, modelSearch)
+                          if (!idxs || idxs.length === 0) {
+                            filtered = []
+                          } else {
+                            const sorted = order ? order.map((i) => idxs[i]) : idxs
+                            filtered = sorted.map((i) => allModels[i])
+                          }
+                        }
+                        const grouped = new Map<string, ModelOption[]>()
+                        for (const m of filtered) {
+                          const list = grouped.get(m.provider) ?? []
+                          list.push(m)
+                          grouped.set(m.provider, list)
+                        }
+                        const providerOrder = ['Anthropic', 'Google', 'OpenRouter']
+                        const sortedProviders = [...grouped.keys()].sort(
+                          (a, b) => (providerOrder.indexOf(a) === -1 ? 99 : providerOrder.indexOf(a)) -
+                                     (providerOrder.indexOf(b) === -1 ? 99 : providerOrder.indexOf(b))
+                        )
+                        return (
+                          <>
+                            <button
+                              type="button"
+                              className={`model-option ${selectedModel === null ? 'active' : ''}`}
+                              onClick={() => { setSelectedModel(null); setModelDropdownOpen(false) }}
+                            >
+                              <span className="model-name">Default (Claude Opus 4.6)</span>
+                            </button>
+                            {sortedProviders.map((provider) => (
+                              <div key={provider}>
+                                <div className="model-section-label">{provider}</div>
+                                {(grouped.get(provider) ?? []).slice(0, provider === 'OpenRouter' ? 30 : undefined).map((m) => (
+                                  <button
+                                    key={m.id}
+                                    type="button"
+                                    className={`model-option ${selectedModel === m.id ? 'active' : ''}`}
+                                    onClick={() => { setSelectedModel(m.id); setModelDropdownOpen(false) }}
+                                  >
+                                    <span className="model-name">{m.name}</span>
+                                    <span className="model-price">
+                                      ${m.pricing.input} / ${m.pricing.output}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            ))}
+                          </>
+                        )
+                      })()
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="option-group max-tokens-group">
+                <label htmlFor="max-tokens-slider" className="option-label">Tokens</label>
+                <input
+                  type="range"
+                  id="max-tokens-slider"
+                  className="max-tokens-slider"
+                  min={256}
+                  max={16384}
+                  step={256}
+                  value={maxTokens}
+                  onChange={(e) => setMaxTokens(Number(e.target.value))}
+                />
+                <input
+                  type="number"
+                  className="top-k-input"
+                  value={maxTokens}
+                  onChange={(e) => setMaxTokens(Math.max(256, Math.min(16384, Number(e.target.value) || 2048)))}
+                  min={256}
+                  max={16384}
+                  step={256}
                 />
               </div>
 

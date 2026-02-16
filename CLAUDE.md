@@ -24,7 +24,7 @@ src/
 ├── embeddings/     # Voyage AI (voyage-4-large, 1024-dim), code (voyage-code-3, 1024-dim)
 ├── storage/        # PostgreSQL + pgvector
 ├── retrieval/      # Vector, BM25, hybrid (RRF), graph-augmented, reranked, staged
-├── generation/     # Simple, cited, validated, synthesis generators (Claude)
+├── generation/     # Simple, cited, validated, synthesis generators (multi-provider via completion.py)
 ├── validation/     # NLI claim verification (bart-large-mnli / deberta-v3-large-mnli)
 ├── evidence/       # Immutable evidence spans, ledgers, support classification
 ├── concepts/       # Alias tables, query expansion, concept resolution
@@ -56,7 +56,7 @@ from src.generation import SimpleGenerator, CitedGenerator, ValidatedGenerator
 
 ### Async patterns
 
-Database operations are async. Embedding is sync. Generation uses `asyncio.to_thread` for Claude API calls.
+Database operations are async. Embedding is sync. Generation uses `call_llm()` from `src.generation.completion` (routes to Anthropic/Gemini/OpenRouter by model ID prefix).
 
 ```python
 store = PgVectorStore()
@@ -76,6 +76,7 @@ await store.store_embedded_chunks(embedded) # async
 | `EmbeddedChunk` | embeddings | Chunk with vector |
 | `SearchResult` | retrieval | Chunk with similarity score |
 | `RetrievalResult` | retrieval | Collection of search results |
+| `CompletionResponse` | generation | Normalized LLM response (text, tokens, model) |
 | `GenerationResult` | generation | Response with metadata |
 | `EvidenceSpan` | evidence | Immutable source reference |
 | `AgentState` | agents | Tracks thoughts, retrievals, budget |
@@ -104,6 +105,12 @@ Required in `.env`:
 VOYAGE_API_KEY=...       # Voyage AI for embeddings
 ANTHROPIC_API_KEY=...    # Anthropic for generation
 POSTGRES_PASSWORD=...    # Database password
+```
+
+Optional (enable additional model providers):
+```
+GEMINI_API_KEY=...       # Google Gemini models
+OPENROUTER_API_KEY=...   # OpenRouter (hundreds of models)
 ```
 
 ## Common tasks

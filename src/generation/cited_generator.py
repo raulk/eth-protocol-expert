@@ -1,18 +1,16 @@
 """Cited Generator - RAG generation with citations for Phase 1."""
 
-import asyncio
-import os
 import re
 import uuid
 from dataclasses import dataclass
 
-import anthropic
 import structlog
 
 from ..config import DEFAULT_MODEL
 from ..evidence.evidence_ledger import EvidenceLedger
 from ..evidence.evidence_span import EvidenceSpan
 from ..retrieval.simple_retriever import RetrievalResult, SimpleRetriever
+from .completion import call_llm
 
 logger = structlog.get_logger()
 
@@ -20,6 +18,7 @@ logger = structlog.get_logger()
 @dataclass
 class CitedGenerationResult:
     """Result from generation with citations."""
+
     query: str
     response: str
     response_with_citations: str
@@ -39,18 +38,14 @@ class CitedGenerator:
     def __init__(
         self,
         retriever: SimpleRetriever,
-        api_key: str | None = None,
         model: str = DEFAULT_MODEL,
         max_context_tokens: int = 8000,
+        max_tokens: int = 2048,
     ):
         self.retriever = retriever
-        self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not self.api_key:
-            raise ValueError("ANTHROPIC_API_KEY not set")
-
         self.model = model
         self.max_context_tokens = max_context_tokens
-        self.client = anthropic.Anthropic(api_key=self.api_key)
+        self.max_tokens = max_tokens
 
     async def generate(
         self,
@@ -75,15 +70,8 @@ class CitedGenerator:
         # Build prompt that encourages citation use
         prompt = self._build_prompt(query, context)
 
-        # Generate response
-        response = await asyncio.to_thread(
-            self.client.messages.create,
-            model=self.model,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-
-        raw_response = response.content[0].text
+        result = await call_llm(self.model, [{"role": "user", "content": prompt}], self.max_tokens)
+        raw_response = result.text
 
         # Parse citations and build evidence ledger
         evidence_ledger = self._build_evidence_ledger(
@@ -102,8 +90,8 @@ class CitedGenerator:
             context_chunks=len(retrieval.results),
             claims=len(evidence_ledger.claims),
             coverage=evidence_ledger.compute_coverage(),
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
 
         return CitedGenerationResult(
@@ -113,8 +101,8 @@ class CitedGenerator:
             evidence_ledger=evidence_ledger,
             retrieval=retrieval,
             model=self.model,
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=result.input_tokens,
+            output_tokens=result.output_tokens,
         )
 
     def _format_context_with_markers(
@@ -134,9 +122,7 @@ class CitedGenerator:
             doc_id = chunk.document_id.upper()
             section = f" - {chunk.section_path}" if chunk.section_path else ""
 
-            context_parts.append(
-                f"{marker} {doc_id}{section}\n{chunk.content}"
-            )
+            context_parts.append(f"{marker} {doc_id}{section}\n{chunk.content}")
 
         context = "\n\n---\n\n".join(context_parts)
         return context, citation_map
@@ -226,10 +212,10 @@ Provide a clear, accurate answer with citations to the relevant sources."""
         Returns list of (sentence, [citation_markers])
         """
         # Pattern for citation markers like [1], [2], [1,2], [1, 2]
-        citation_pattern = re.compile(r'\[(\d+(?:\s*,\s*\d+)*)\]')
+        citation_pattern = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 
         # Split into sentences (roughly)
-        sentence_pattern = re.compile(r'([^.!?]+[.!?]+)')
+        sentence_pattern = re.compile(r"([^.!?]+[.!?]+)")
         sentences = sentence_pattern.findall(response)
 
         # If no sentence punctuation found, treat whole response as one
@@ -243,12 +229,12 @@ Provide a clear, accurate answer with citations to the relevant sources."""
             citations = []
             for match in matches:
                 # Handle multiple citations like [1, 2]
-                numbers = re.findall(r'\d+', match)
+                numbers = re.findall(r"\d+", match)
                 for num in numbers:
                     citations.append(f"[{num}]")
 
             # Clean citation markers from sentence for storage
-            clean_sentence = citation_pattern.sub('', sentence).strip()
+            clean_sentence = citation_pattern.sub("", sentence).strip()
 
             results.append((clean_sentence, citations))
 

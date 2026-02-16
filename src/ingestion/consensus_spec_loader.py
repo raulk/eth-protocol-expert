@@ -1,9 +1,9 @@
 """Loader for ethereum/consensus-specs repository."""
 
+import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-import subprocess
-import re
 
 import structlog
 

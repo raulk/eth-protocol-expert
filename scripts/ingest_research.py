@@ -24,9 +24,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion.eip_parser import EIPSection
 from src.ingestion.research_loader import ResearchLoader
 from src.storage.pg_vector_store import PgVectorStore
@@ -105,7 +106,6 @@ async def ingest_research(
     python_only: bool = False,
 ) -> None:
     """Ingest research docs from ethereum/research repo."""
-    load_dotenv()
 
     logger.info(
         "starting_research_ingestion",
@@ -117,7 +117,7 @@ async def ingest_research(
 
     loader = ResearchLoader(include_python=not markdown_only)
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

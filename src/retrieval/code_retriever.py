@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import structlog
 
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import Embedder
 from src.parsing import CodeUnit, UnitType
 from src.storage.pg_vector_store import PgVectorStore
 
@@ -39,7 +39,7 @@ class CodeRetriever:
 
     def __init__(
         self,
-        embedder: VoyageEmbedder,
+        embedder: Embedder,
         store: PgVectorStore,
         default_top_k: int = 10,
     ):

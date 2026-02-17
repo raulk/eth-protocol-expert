@@ -21,10 +21,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import TranscriptChunker, convert_chunks
-from src.embeddings.local_embedder import LocalEmbedder
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import ACDTranscriptLoader
 from src.storage import PgVectorStore
 
@@ -40,25 +40,19 @@ logger = structlog.get_logger()
 async def ingest_acd_transcripts(
     data_dir: str = "data/pm",
     limit: int | None = None,
-    use_local_embeddings: bool = False,
 ) -> None:
     """Ingest ACD transcripts into the database."""
-    load_dotenv()
 
     logger.info(
         "starting_acd_ingestion",
         data_dir=data_dir,
         limit=limit,
-        local_embeddings=use_local_embeddings,
     )
 
     loader = ACDTranscriptLoader(repo_path=data_dir)
     chunker = TranscriptChunker(max_tokens=512)
 
-    if use_local_embeddings:
-        embedder = LocalEmbedder()
-    else:
-        embedder = VoyageEmbedder()
+    embedder = create_embedder()
 
     store = PgVectorStore()
     await store.connect()
@@ -143,19 +137,12 @@ def main() -> None:
         default=None,
         help="Limit number of transcripts to process (for testing)",
     )
-    parser.add_argument(
-        "--local",
-        action="store_true",
-        help="Use local BGE embeddings instead of Voyage API",
-    )
-
     args = parser.parse_args()
 
     asyncio.run(
         ingest_acd_transcripts(
             data_dir=args.data_dir,
             limit=args.limit,
-            use_local_embeddings=args.local,
         )
     )
 

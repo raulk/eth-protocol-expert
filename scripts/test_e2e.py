@@ -18,7 +18,7 @@ async def test_end_to_end():
     print("=" * 60)
 
     from src.chunking import FixedChunker
-    from src.embeddings import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.ingestion import EIPParser
     from src.retrieval import SimpleRetriever
     from src.storage import PgVectorStore
@@ -36,7 +36,7 @@ async def test_end_to_end():
 
     # 3. Create embedder
     print("\n3. Creating embedder...")
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     print("   Embedder ready!")
 
     # 4. Create test content

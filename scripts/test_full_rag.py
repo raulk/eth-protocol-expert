@@ -19,7 +19,7 @@ async def test_full_rag():
     print("=" * 60)
 
     from src.chunking import FixedChunker
-    from src.embeddings import VoyageEmbedder
+    from src.embeddings import create_embedder
     from src.generation import SimpleGenerator
     from src.ingestion import EIPParser
     from src.ingestion.eip_loader import LoadedEIP
@@ -31,7 +31,7 @@ async def test_full_rag():
     store = PgVectorStore(db_url)
     await store.connect()
     await store.initialize_schema()
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     print("   Infrastructure ready!")
 
     # Load multiple EIPs for richer context

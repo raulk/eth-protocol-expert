@@ -21,9 +21,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion.builder_specs_loader import BuilderSpecsLoader
 from src.ingestion.eip_parser import EIPSection
 from src.storage.pg_vector_store import PgVectorStore
@@ -100,13 +101,12 @@ async def ingest_builder_specs(
     limit: int | None = None,
 ) -> None:
     """Ingest builder-specs from ethereum/builder-specs repo."""
-    load_dotenv()
 
     logger.info("starting_builder_specs_ingestion", batch_size=batch_size, limit=limit)
 
     loader = BuilderSpecsLoader()
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

@@ -23,11 +23,11 @@ from pathlib import Path
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.ingestion import EthresearchLoader, RawContentCache
 from src.ingestion.discourse_client import DiscourseClient
 
-load_dotenv()
 logger = structlog.get_logger()
 
 ETHRESEARCH_BASE_URL = "https://ethresear.ch"

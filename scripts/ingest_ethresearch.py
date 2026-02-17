@@ -18,13 +18,13 @@ from dataclasses import dataclass
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import Chunk, ForumChunker, convert_chunks
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import EthresearchLoader, LoadedForumTopic, RawContentCache
 from src.storage import PgVectorStore
 
-load_dotenv()
 logger = structlog.get_logger()
 
 
@@ -76,7 +76,7 @@ async def ingest_ethresearch(
     topics = loader.iter_topics_from_cache()
 
     # Connect to database
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
     await store.connect()
     await store.initialize_schema()
@@ -147,7 +147,7 @@ async def ingest_ethresearch(
                 pending_chunks = []
                 return
 
-            # Embed all chunks in one call (internally batched by VoyageEmbedder)
+            # Embed all chunks in one call (internally batched by embedder)
             embedded = embedder.embed_chunks(valid_chunks)
 
             # Store chunks

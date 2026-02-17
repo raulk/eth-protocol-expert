@@ -21,9 +21,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import DevP2PLoader
 from src.ingestion.eip_parser import EIPSection
 from src.ingestion.markdown_spec_loader import MarkdownSpec
@@ -129,13 +130,12 @@ async def ingest_devp2p(
     limit: int | None = None,
 ) -> None:
     """Ingest devp2p specs from ethereum/devp2p repo."""
-    load_dotenv()
 
     logger.info("starting_devp2p_ingestion", batch_size=batch_size, limit=limit)
 
     loader = DevP2PLoader()
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

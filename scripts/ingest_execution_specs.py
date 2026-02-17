@@ -11,13 +11,13 @@ import hashlib
 import structlog
 import tiktoken
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import Chunk
-from src.embeddings import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion import ExecutionSpecLoader
 from src.storage import PgVectorStore
 
-load_dotenv()
 logger = structlog.get_logger()
 
 
@@ -87,7 +87,7 @@ def chunk_python_code(
 async def ingest_execution_specs() -> None:
     """Ingest execution specs into the database."""
     loader = ExecutionSpecLoader()
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
     await store.connect()
 

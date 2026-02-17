@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import structlog
 
-from ..embeddings.voyage_embedder import VoyageEmbedder
+from ..embeddings import Embedder
 from ..filters.metadata_filter import MetadataFilter, MetadataQuery
 from ..storage.pg_vector_store import PgVectorStore, SearchResult, StoredChunk
 from .bm25_retriever import BM25Result, BM25Retriever
@@ -51,7 +51,7 @@ class HybridRetriever:
 
     def __init__(
         self,
-        embedder: VoyageEmbedder,
+        embedder: Embedder,
         store: PgVectorStore,
         bm25_retriever: BM25Retriever | None = None,
         rrf_k: int = 60,
@@ -62,7 +62,7 @@ class HybridRetriever:
         """Initialize hybrid retriever.
 
         Args:
-            embedder: Voyage embedder for query embedding
+            embedder: Embedder for query embedding (any backend)
             store: PostgreSQL vector store
             bm25_retriever: Optional pre-configured BM25 retriever
             rrf_k: RRF constant k (default: 60)

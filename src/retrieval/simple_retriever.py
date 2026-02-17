@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import structlog
 
-from ..embeddings.voyage_embedder import VoyageEmbedder
+from ..embeddings import Embedder
 from ..storage.pg_vector_store import PgVectorStore, SearchResult
 
 logger = structlog.get_logger()
@@ -27,7 +27,7 @@ class SimpleRetriever:
 
     def __init__(
         self,
-        embedder: VoyageEmbedder,
+        embedder: Embedder,
         store: PgVectorStore,
         default_top_k: int = 10,
     ):

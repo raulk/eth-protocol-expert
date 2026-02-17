@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.ingestion.orchestrator import IngestionOrchestrator
 
@@ -315,7 +316,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    load_dotenv()
 
     orchestrator = IngestionOrchestrator(state_path=args.state_path)
     orchestrator.load_state()

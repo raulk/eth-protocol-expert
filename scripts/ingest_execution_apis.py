@@ -22,9 +22,10 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
-from src.embeddings.voyage_embedder import VoyageEmbedder
+from src.embeddings import create_embedder
 from src.ingestion.eip_parser import EIPSection
 from src.ingestion.execution_apis_loader import ExecutionAPIsLoader
 from src.storage.pg_vector_store import PgVectorStore
@@ -101,13 +102,12 @@ async def ingest_execution_apis(
     limit: int | None = None,
 ) -> None:
     """Ingest execution-apis from ethereum/execution-apis repo."""
-    load_dotenv()
 
     logger.info("starting_execution_apis_ingestion", batch_size=batch_size, limit=limit)
 
     loader = ExecutionAPIsLoader()
     chunker = SectionChunker(max_tokens=512, overlap_tokens=64)
-    embedder = VoyageEmbedder()
+    embedder = create_embedder()
     store = PgVectorStore()
 
     await store.connect()

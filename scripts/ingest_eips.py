@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.fixed_chunker import FixedChunker
 from src.chunking.section_chunker import SectionChunker
@@ -49,7 +50,6 @@ async def ingest_eips(
     limit: int | None = None,
 ):
     """Main ingestion pipeline."""
-    load_dotenv()
 
     logger.info("starting_ingestion", data_dir=data_dir, section_chunking=use_section_chunking)
 

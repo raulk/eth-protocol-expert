@@ -10,13 +10,13 @@ import os
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.embeddings import create_embedder
 from src.generation import CitedGenerator
 from src.retrieval import SimpleRetriever
 from src.storage import PgVectorStore
 
-load_dotenv()
 logger = structlog.get_logger()
 
 

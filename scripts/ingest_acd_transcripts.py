@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import TranscriptChunker, convert_chunks
 from src.embeddings import create_embedder
@@ -41,7 +42,6 @@ async def ingest_acd_transcripts(
     limit: int | None = None,
 ) -> None:
     """Ingest ACD transcripts into the database."""
-    load_dotenv()
 
     logger.info(
         "starting_acd_ingestion",

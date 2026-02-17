@@ -10,13 +10,13 @@ import asyncio
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import PaperChunker, convert_chunks
 from src.embeddings import create_embedder
 from src.ingestion import ArxivFetcher, PDFExtractor, QualityScorer
 from src.storage import PgVectorStore
 
-load_dotenv()
 logger = structlog.get_logger()
 
 

@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.embeddings import create_embedder
 from src.generation.cited_generator import CitedGenerator
@@ -98,7 +99,6 @@ async def query(
     show_reasoning: bool = True,
 ):
     """Run a query against the system."""
-    load_dotenv()
 
     # Initialize components
     store = PgVectorStore()

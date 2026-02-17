@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking import Chunk
 from src.chunking.code_chunker import CodeChunk, CodeChunker
@@ -199,7 +200,7 @@ def parse_files_concurrent(
 
 
 async def embed_batch_async(
-    embedder: CodeEmbedder,
+    embedder,
     chunks: list[CodeChunk],
     semaphore: asyncio.Semaphore,
 ) -> list:
@@ -210,7 +211,7 @@ async def embed_batch_async(
 
 
 async def embed_chunks_concurrent(
-    embedder: CodeEmbedder,
+    embedder,
     all_chunks: list[CodeChunk],
     batch_size: int = 64,
     max_concurrent: int = MAX_EMBED_CONCURRENT,
@@ -302,7 +303,6 @@ async def ingest_client(
     embed_concurrent: int = MAX_EMBED_CONCURRENT,
 ):
     """Main ingestion pipeline for a client codebase with concurrent processing."""
-    load_dotenv()
 
     if repo_name not in KNOWN_REPOS:
         available = ", ".join(KNOWN_REPOS.keys())
@@ -452,7 +452,6 @@ async def ingest_all_clients(
     eip_numbers: list[int] | None = None,
 ):
     """Ingest all known client repositories in parallel."""
-    load_dotenv()
 
     repos = list(KNOWN_REPOS.keys())
     logger.info("ingesting_all_clients", repos=repos)

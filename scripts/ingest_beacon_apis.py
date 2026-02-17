@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
 from src.embeddings import create_embedder
@@ -110,7 +111,6 @@ async def ingest_beacon_apis(
     limit: int | None = None,
 ) -> None:
     """Ingest beacon-apis from ethereum/beacon-APIs repo."""
-    load_dotenv()
 
     logger.info("starting_beacon_apis_ingestion", batch_size=batch_size, limit=limit)
 

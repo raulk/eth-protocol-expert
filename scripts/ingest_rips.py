@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
 from src.embeddings import create_embedder
@@ -38,7 +39,6 @@ async def ingest_rips(
     limit: int | None = None,
 ):
     """Ingest RIPs from ethereum/RIPs repo."""
-    load_dotenv()
 
     logger.info("starting_rip_ingestion", batch_size=batch_size, limit=limit)
 

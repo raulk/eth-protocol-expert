@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
 from src.embeddings import create_embedder
@@ -39,7 +40,6 @@ async def ingest_ercs(
     limit: int | None = None,
 ):
     """Ingest ERCs from both ethereum/EIPs and ethereum/ERCs repos."""
-    load_dotenv()
 
     logger.info("starting_erc_ingestion", batch_size=batch_size, limit=limit)
 

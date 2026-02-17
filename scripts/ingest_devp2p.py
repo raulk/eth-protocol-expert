@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import structlog
 from dotenv import load_dotenv
+load_dotenv()  # Must run before any src.* imports
 
 from src.chunking.section_chunker import SectionChunker
 from src.embeddings import create_embedder
@@ -129,7 +130,6 @@ async def ingest_devp2p(
     limit: int | None = None,
 ) -> None:
     """Ingest devp2p specs from ethereum/devp2p repo."""
-    load_dotenv()
 
     logger.info("starting_devp2p_ingestion", batch_size=batch_size, limit=limit)
 
